@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenUnknown 架构文档 V1.2.0</title>
+  <style>
+    :root {
+      --bg: #0f1117; --panel: #161922; --panel-2: #1d212c; --border: #2a2f3d;
+      --text: #e6e8ee; --muted: #9aa0ac; --accent: #6c8cff; --accent-2: #8a6cff;
+      --green: #5fcf80; --orange: #ffb86c; --pink: #ff8a9a; --red: #ff6c7a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1200px 600px at 80% -10%, #1a1d29 0%, var(--bg) 55%);
+      color: var(--text); line-height: 1.7; min-height: 100vh;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+    header.hero { border-bottom: 1px solid var(--border); padding-bottom: 28px; margin-bottom: 40px; }
+    .badge {
+      display: inline-block; font-size: 12px; font-weight: 600;
+      padding: 4px 12px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; letter-spacing: 0.5px;
+    }
+    h1 { font-size: 34px; margin: 16px 0 8px; font-weight: 700; letter-spacing: 0.5px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    h2 {
+      font-size: 22px; margin: 48px 0 18px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border); font-weight: 600;
+      display: flex; align-items: center; gap: 10px;
+    }
+    h2 .num {
+      font-size: 13px; color: var(--accent); font-weight: 700;
+      width: 28px; height: 28px; border-radius: 8px;
+      background: rgba(108,140,255,0.12); border: 1px solid rgba(108,140,255,0.3);
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    h3 { font-size: 16px; margin: 24px 0 10px; color: var(--text); font-weight: 600; }
+    p { margin: 10px 0; color: #d4d7de; }
+    code {
+      font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      background: var(--panel-2); padding: 2px 6px; border-radius: 5px;
+      font-size: 13px; color: var(--accent); border: 1px solid var(--border);
+    }
+    pre {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px 18px; overflow-x: auto;
+      font-size: 13px; line-height: 1.6;
+    }
+    pre code { background: none; border: none; padding: 0; color: #d4d7de; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    td code { font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+    .stat .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .stat .value { font-size: 18px; font-weight: 600; }
+    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 5px; margin-right: 6px; font-weight: 600; }
+    .tag.blue { background: rgba(108,140,255,0.15); color: var(--accent); border: 1px solid rgba(108,140,255,0.3); }
+    .tag.green { background: rgba(95,207,128,0.15); color: var(--green); border: 1px solid rgba(95,207,128,0.3); }
+    .tag.orange { background: rgba(255,184,108,0.15); color: var(--orange); border: 1px solid rgba(255,184,108,0.3); }
+    .tag.pink { background: rgba(255,138,154,0.15); color: var(--pink); border: 1px solid rgba(255,138,154,0.3); }
+    .tag.purple { background: rgba(138,108,255,0.15); color: var(--accent-2); border: 1px solid rgba(138,108,255,0.3); }
+    .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0; font-size: 13px; }
+    .flow .step { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-weight: 500; }
+    .flow .arrow { color: var(--accent); font-weight: 700; }
+    ul { padding-left: 22px; } ul li { margin: 6px 0; color: #d4d7de; }
+    .meta-row { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .note { border-left: 3px solid var(--orange); background: rgba(255,184,108,0.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .success { border-left: 3px solid var(--green); background: rgba(95,207,128,0.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .todo { border-left: 3px solid var(--orange); background: rgba(255,184,108,0.08); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .todo strong { color: var(--orange); }
+    footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+    .version-tag {
+      position: fixed; top: 16px; right: 20px; z-index: 50;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+      padding: 6px 14px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; box-shadow: 0 4px 16px rgba(108,140,255,0.35);
+    }
+    .mermaid { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin: 16px 0; text-align: center; overflow-x: auto; }
+    .changelog { font-size: 14px; }
+    .changelog li { margin: 8px 0; }
+    .changelog .new { color: var(--green); font-weight: 600; }
+    .changelog .opt { color: var(--orange); font-weight: 600; }
+    .changelog .fix { color: var(--accent); font-weight: 600; }
+    .compare-table td:nth-child(2) { color: var(--pink); }
+    .compare-table td:nth-child(3) { color: var(--green); }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: "dark",
+      themeVariables: {
+        primaryColor: "#1d212c", primaryBorderColor: "#6c8cff",
+        primaryTextColor: "#e6e8ee", lineColor: "#6c8cff",
+        fontFamily: "-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif"
+      }
+    });
+  </script>
+</head>
+<body>
+  <div class="version-tag">V1.2.0</div>
+  <div class="wrap">
+    <header class="hero">
+      <span class="badge">V1.2.0</span>
+      <h1>OpenUnknown 架构文档</h1>
+      <div class="subtitle">Token 优化专项 · 工具按需绑定 · 上下文压缩 · 提示词模板化 · MCP 缓存</div>
+      <div class="meta-row">文档版本 1.2.0 &nbsp;|&nbsp; 生成日期 2026-08-21</div>
+    </header>
+
+    <section>
+      <h2><span class="num">0</span>V1.2.0 变更摘要</h2>
+      <p>V1.1.0 完成了「让 Agent 能干活」的功能建设，但随之带来了 token 开销失控的问题：首轮闲聊即 ~2800 token（工具 schema 底噪），长对话可达 40000+ token（上下文膨胀）。V1.2.0 是一次<strong>性能优化专项</strong>，核心目标是将 token 开销降至合理水平，同时重构提示词管理，借鉴 OpenManus 的 prompt 分层架构。</p>
+      <ul class="changelog">
+        <li><span class="opt">[优化]</span> <strong>MCP 工具列表缓存</strong>：按 Server 配置指纹缓存工具元数据，避免每次请求都冷启动子进程拉取。</li>
+        <li><span class="opt">[优化]</span> <strong>飞书 skill 描述瘦身</strong>：从 ~3700 字完整描述压缩到 ~800 字短目录（domain: 一句话用途），且仅命中飞书关键词时才注入。</li>
+        <li><span class="opt">[优化]</span> <strong>上下文压缩</strong>：<code>_compact_history</code> 截断旧轮的超长工具返回，保留最近 16 条消息原文。</li>
+        <li><span class="opt">[优化]</span> <strong>工具按需绑定（关键词预筛）</strong>：闲聊时不绑任何工具 schema，命中天气/地图/飞书关键词才绑对应工具，首轮底噪从 ~2800 降至 ~400 token。</li>
+        <li><span class="fix">[重构]</span> <strong>提示词模板化</strong>：新建 <code>prompts.py</code> 集中管理所有提示词，system prompt 从 ~450 字极简至 ~120 字，删除冗余的「匹配策略」文本。</li>
+        <li><span class="fix">[重构]</span> <strong>身份指令合并</strong>：从 3 处重复声明合并为 1 处（末尾 identity），消除冗余。</li>
+      </ul>
+
+      <h3>量化效果</h3>
+      <div class="grid">
+        <div class="stat"><div class="label">首轮闲聊 token</div><div class="value" style="color:var(--green)">~400<span style="font-size:12px;color:var(--muted);margin-left:6px">(was ~2800)</span></div></div>
+        <div class="stat"><div class="label">System prompt 字数</div><div class="value" style="color:var(--green)">~120<span style="font-size:12px;color:var(--muted);margin-left:6px">(was ~450)</span></div></div>
+        <div class="stat"><div class="label">飞书描述字数</div><div class="value" style="color:var(--green)">~800<span style="font-size:12px;color:var(--muted);margin-left:6px">(was ~3700)</span></div></div>
+        <div class="stat"><div class="label">MCP 工具拉取</div><div class="value" style="color:var(--green)">缓存<span style="font-size:12px;color:var(--muted);margin-left:6px">(was 每次)</span></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="num">1</span>Token 优化：全链路分析</h2>
+      <p>每轮发给模型的输入 token 由三部分组成。V1.2.0 对每部分都做了针对性优化。</p>
+      <table class="compare-table">
+        <thead><tr><th>组成</th><th>V1.1.0（优化前）</th><th>V1.2.0（优化后）</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>System prompt 文本</td>
+            <td>~450 字（身份 + 工具规则 + 匹配策略）+ 飞书 3700 字 = 每轮 ~4150 字</td>
+            <td>~120 字（身份 + 一句引导），飞书仅按需 ~800 字</td>
+          </tr>
+          <tr>
+            <td>工具 Schema (bind_tools)</td>
+            <td>15 个工具全量绑定，~1400 token/轮</td>
+            <td>关键词预筛：闲聊 0 个 / 天气 1-2 个 / 地图 12 个 / 飞书 1 个</td>
+          </tr>
+          <tr>
+            <td>历史消息</td>
+            <td>全量透传，无压缩上限</td>
+            <td>旧工具结果截断至 240 字，尾部 16 条保原文</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2><span class="num">2</span>工具按需绑定（关键词预筛）</h2>
+      <p>V1.1.0 的 <code>bind_tools</code> 把全部工具的 JSON Schema 每轮都发给模型。高德 MCP 一家就 12 个工具，即使用户只说「你好」也带上 ~1400 token 的 schema 底噪。</p>
+      <p>V1.2.0 在 <code>_chat_node</code> 中引入关键词预筛：先取用户最新消息文本，命中哪类关键词才绑定对应工具。</p>
+
+      <h3>2.1 关键词分组</h3>
+      <table>
+        <thead><tr><th>分组</th><th>关键词示例</th><th>命中后绑定的工具</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag blue">weather</span></td><td>天气、气温、下雨、多少度...</td><td><code>get_weather</code> + <code>maps_weather</code></td></tr>
+          <tr><td><span class="tag green">map</span></td><td>路线、导航、附近、高德、怎么走...</td><td>全部 <code>maps_*</code> 工具</td></tr>
+          <tr><td><span class="tag purple">feishu</span></td><td>飞书、文档、日历、待办、feishu.cn...</td><td><code>lark_cli</code></td></tr>
+          <tr><td><span class="tag orange">未归类 MCP</span></td><td>（用户点名服务或工具名 token 命中）</td><td>对应 MCP 工具</td></tr>
+        </tbody>
+      </table>
+      <p>对于未归类的自定义 MCP 工具（如用户自建的计算器 MCP），通过 <code>_mcp_tool_hit</code> 做兜底匹配：解析描述里的 <code>[MCP: 服务名]</code>，或匹配工具名中 >= 3 字符的 token。</p>
+
+      <h3>2.2 效果对比</h3>
+      <table>
+        <thead><tr><th>场景</th><th>V1.1.0 绑定工具数</th><th>V1.2.0 绑定工具数</th><th>省掉的 schema token</th></tr></thead>
+        <tbody>
+          <tr><td>闲聊「你好」</td><td>15</td><td>0</td><td>~1400</td></tr>
+          <tr><td>「今天天气怎么样」</td><td>15</td><td>2</td><td>~1200</td></tr>
+          <tr><td>「读这个飞书文档」</td><td>15</td><td>1</td><td>~1300</td></tr>
+          <tr><td>「从北京到上海怎么走」</td><td>15</td><td>12</td><td>~200</td></tr>
+        </tbody>
+      </table>
+
+      <div class="note">工具预筛只影响 <code>bind_tools</code>（模型能调的工具），<code>_tools_node</code> 仍使用全量工具 map 做执行映射，确保安全。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">3</span>提示词模板化重构</h2>
+      <p>借鉴 OpenManus 的 prompt 分层架构，将所有提示词文本从业务代码中抽出，集中管理于 <code>backend/agent/prompts.py</code>。</p>
+
+      <h3>3.1 设计理念对照</h3>
+      <table>
+        <thead><tr><th>维度</th><th>OpenManus 做法</th><th>OpenUnknown V1.2.0</th></tr></thead>
+        <tbody>
+          <tr><td>存放</td><td><code>app/prompt/*.py</code></td><td><code>backend/agent/prompts.py</code></td></tr>
+          <tr><td>消费</td><td>Agent import 常量</td><td><code>graph.py</code> import 常量</td></tr>
+          <tr><td>动态值</td><td><code>{directory}</code> 占位符 + <code>.format()</code></td><td><code>{app_name}</code> <code>{model_name}</code> <code>{domain_list}</code> + <code>.format()</code></td></tr>
+          <tr><td>工具能力</td><td>只走 FC 的 <code>tools=</code> 参数</td><td>只走 <code>bind_tools</code>，prompt 不列工具</td></tr>
+          <tr><td>system prompt</td><td>极简（2 句话）</td><td>极简（身份 + 一句引导，~120 字）</td></tr>
+        </tbody>
+      </table>
+
+      <h3>3.2 prompts.py 结构</h3>
+      <pre><code>backend/agent/prompts.py
+├── SYSTEM_PROMPT      # 身份 + 工具引导（{app_name} 占位符）
+├── IDENTITY_PROMPT    # 模型身份覆盖（{model_name} 占位符，放在历史之后）
+└── LARK_SECTION       # 飞书 CLI 引导（{domain_list} 占位符，按需注入）</code></pre>
+
+      <h3>3.3 prompt 瘦身效果</h3>
+      <p><strong>V1.1.0 base prompt（~450 字，每轮拼）：</strong></p>
+      <pre><code>你是 OpenUnknown 的智能助手...你由大模型 xxx 驱动...
+当用户询问你的模型或身份时...历史对话里如果出现过其他模型名...
+## 工具使用规则
+你可以使用工具...每个工具的 description 以 [MCP: 服务名] 开头...
+核心原则：当用户的意图能被任何已绑定的工具满足时，必须调用工具...
+匹配策略：
+1. 用户明确指定来源...
+2. 用户意图与某个工具的 description 语义匹配...
+3. 多个工具都能满足时，优先 MCP 工具...
+4. 需要多步骤时可连续调用多个工具...</code></pre>
+      <p><strong>V1.2.0 SYSTEM_PROMPT（~120 字，模板）：</strong></p>
+      <pre><code>你是 {app_name} 的智能助手，一个乐于助人、诚实、严谨的问答助理。
+请用简洁清晰的语言回答用户的问题，遇到不确定的内容要如实说明。
+你可以使用工具来获取实时信息或执行操作。
+当用户的意图能被已绑定的工具满足时，必须调用工具，不要凭空编造。
+需要多步骤时可连续调用多个工具。</code></pre>
+      <p>删掉了什么：</p>
+      <ul>
+        <li>身份声明（→ 移到末尾 IDENTITY_PROMPT，只保留一处）</li>
+        <li>「匹配策略 1/2/3/4」（→ 交给 FC 的 tool description 自动匹配，prompt 不重复列）</li>
+        <li>「[MCP: 服务名] 开头」的说明（→ 模型自己看 description 前缀即可）</li>
+      </ul>
+      <div class="success"><strong>核心原则</strong>：Prompt 只负责「你是谁 + 行为准则」，工具能力交给 FC schema 描述，不在 prompt 文本里重复。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">4</span>飞书 Skill 描述优化</h2>
+      <p>V1.1.0 把 27 个飞书 skill 的完整描述（~3700 字）每轮注入 system prompt。V1.2.0 做了两层优化：</p>
+
+      <h3>4.1 描述瘦身：完整描述 → 短目录</h3>
+      <p><code>load_skill_descriptions()</code> 现在只返回 domain 路由表的数据行（每个 domain 一行 <code>- domain: 一句话用途</code>），共约 ~500 字。头部的使用说明模板在 <code>prompts.py</code> 的 <code>LARK_SECTION</code> 中定义（~300 字）。</p>
+      <pre><code># prompts.py LARK_SECTION 模板（固定部分）
+## 飞书 CLI 能力
+所有飞书操作只通过工具 lark_cli...
+调用：lark_cli(command="<domain> <subcommand> [flags]")。
+不确定子命令时必须先 lark_cli(command="<domain> --help")...
+domain 目录：
+{domain_list}     <-- 动态填充
+示例：不确定读文档命令时先 lark_cli(command="docs --help")...</code></pre>
+
+      <h3>4.2 按需注入：关键词门控</h3>
+      <p><code>_get_system_prompt(include_lark)</code> 只在 <code>_FEISHU_KWS</code> 关键词命中时才追加 LARK_SECTION。用户说「你好」→ 不带飞书目录；用户说「帮我看看飞书文档」→ 追加。</p>
+      <div class="flow">
+        <span class="step">SYSTEM_PROMPT.format(app_name=...)<br/>~120 字，每轮</span>
+        <span class="arrow">+（仅命中飞书意图时）</span>
+        <span class="step">LARK_SECTION.format(domain_list=...)<br/>~800 字，按需</span>
+      </div>
+      <div class="note"><code>_lark_domain_list</code> 进程内缓存一次，后续直接拼接，无重复子进程开销。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">5</span>MCP 工具列表缓存</h2>
+      <p>V1.1.0 的问题：每次 <code>_chat_node</code> 调用都重新连接所有已启用 MCP Server 拉取工具列表，<code>npx</code> 冷启动 Node 进程开销大。</p>
+      <p>V1.2.0 在 <code>mcp/manager.py</code> 中引入按 Server 配置指纹缓存：</p>
+
+      <h3>5.1 缓存机制</h3>
+      <pre class="mermaid">
+graph LR
+    REQ["_chat_node 请求工具列表"] --> CHK{"_meta_cache 命中?<br/>指纹匹配?"}
+    CHK --"命中"--> USE["直接返回缓存的工具元数据"]
+    CHK --"未命中"--> CONN["连接 MCP Server"]
+    CONN --> LIST["session.list_tools()"]
+    LIST --> SAVE["缓存到 _meta_cache<br/>(server_id -> (指纹, 元数据))"]
+    SAVE --> USE
+
+    INV["保存/删除/导入 MCP 配置"] --> CLR["invalidate_mcp_cache()"]
+    CLR --> CHK
+      </pre>
+
+      <h3>5.2 关键实现</h3>
+      <ul>
+        <li><strong>指纹计算</strong>：<code>_server_fingerprint(cfg)</code> 对 <code>server_type / command / args / env / url</code> 做 JSON 序列化，配置变了才失效。</li>
+        <li><strong>失效时机</strong>：<code>main.py</code> 中保存、删除、导入 MCP 配置时调用 <code>invalidate_mcp_cache()</code>。</li>
+        <li><strong>清理机制</strong>：<code>_prune_stale_cache(alive_ids)</code> 在每次请求时清掉已删除 Server 的缓存条目。</li>
+      </ul>
+      <div class="success"><strong>效果</strong>：首次请求仍需冷启动（不可避免），但同一配置后续请求直接走缓存，延迟从 ~2-5s 降至 <1ms。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">6</span>上下文压缩</h2>
+      <p>长对话中，历史消息会线性膨胀。特别是工具返回（如 <code>lark_cli docs --help</code> 输出 3000+ 字），每轮都全量发给模型，导致 token 爆炸。</p>
+
+      <h3>6.1 压缩策略：_compact_history</h3>
+      <pre class="mermaid">
+graph TD
+    MSG["state.messages (checkpoint 原文)"] --> SPLIT{"len > KEEP_TAIL ?"}
+    SPLIT --"否"--> PASS["直接返回原文"]
+    SPLIT --"是"--> HEAD["head = messages[:-16]"]
+    SPLIT --"是"--> TAIL["tail = messages[-16:] (保留原文)"]
+    HEAD --> LOOP["遍历 head"]
+    LOOP --> CHK{"msg.type == tool<br/>且 len > 240 字?"}
+    CHK --"是"--> TRUNC["截断至 240 字 + '...(已截断)'"]
+    CHK --"否"--> KEEP["保留原文"]
+    TRUNC --> OUT["compacted"]
+    KEEP --> OUT
+    OUT --> MERGE["compacted + tail"]
+    TAIL --> MERGE
+    MERGE --> LLM["发给 LLM"]
+      </pre>
+
+      <h3>6.2 参数设计</h3>
+      <table>
+        <thead><tr><th>参数</th><th>值</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td><code>_KEEP_TAIL</code></td><td>16</td><td>最近 16 条消息保持原文（覆盖当前工具轮）</td></tr>
+          <tr><td><code>_OLD_TOOL_CHARS</code></td><td>240</td><td>更早的 tool 消息截断到 240 字</td></tr>
+        </tbody>
+      </table>
+
+      <h3>6.3 设计要点</h3>
+      <ul>
+        <li><strong>只压缩 tool 消息</strong>：<code>human</code> 和 <code>ai</code> 消息不截断，保持对话连贯。</li>
+        <li><strong>只压缩 LLM 输入</strong>：checkpoint 中存的仍是完整原文，压缩只作用于本轮送模型的 messages。</li>
+        <li><strong>tool_call_id 配对不受影响</strong>：截断只改内容不删消息，tool_call / tool_result 配对关系保持。</li>
+      </ul>
+      <div class="note">日志 <code>[LLM 输入] 历史压缩 X 字 -> Y 字</code> 可量化每轮的压缩效果。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">7</span>改造后的 _chat_node 全流程</h2>
+      <p>综合以上所有优化，V1.2.0 的 <code>_chat_node</code> 执行流程如下：</p>
+      <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant S as state (checkpoint)
+    participant N as _chat_node
+    participant P as prompts.py
+    participant T as _select_tools
+    participant L as LLM
+
+    N->>S: 取最新 human 消息文本
+    N->>T: _select_tools(全部工具, 用户文本, 关键词命中)
+    T-->>N: 本轮绑定的工具子集 (可能为空)
+    N->>P: SYSTEM_PROMPT.format(app_name=...)
+    Note over N: 命中飞书? -> + LARK_SECTION
+    N->>P: IDENTITY_PROMPT.format(model_name=...)
+    N->>N: _compact_history(历史消息)
+    N->>N: 组装: [system, *history, identity]
+    N->>L: llm.bind_tools(子集).ainvoke(messages)
+    L-->>N: response
+      </pre>
+    </section>
+
+    <section>
+      <h2><span class="num">8</span>目录结构变更</h2>
+      <p>V1.2.0 新增 <code>prompts.py</code>，其余文件位置不变。</p>
+      <pre><code>backend/agent/
+├── prompts.py        # 【新增】提示词模板（SYSTEM_PROMPT / IDENTITY_PROMPT / LARK_SECTION）
+├── graph.py          # LangGraph 图 + 关键词预筛 + 上下文压缩（瘦身后 289 行）
+├── llm.py            # ChatOpenAI 封装
+├── tools/
+│   ├── __init__.py
+│   ├── weather.py
+│   └── lark_cli.py   # load_skill_descriptions() 现只返回 domain 数据行
+└── mcp/
+    ├── __init__.py
+    ├── client.py
+    ├── converter.py
+    └── manager.py    # 新增 _meta_cache / _server_fingerprint / invalidate_mcp_cache
+</code></pre>
+    </section>
+
+    <section>
+      <h2><span class="num">9</span>关键设计决策</h2>
+      <ul>
+        <li><strong>工具能力不写进 prompt</strong>：删除「匹配策略 1/2/3/4」，信任 FC 的 tool description + schema 足以引导模型选对工具。prompt 只负责行为准则。</li>
+        <li><strong>关键词预筛而非两阶段模型判断</strong>：零额外模型调用、零延迟、零成本，虽不如让模型判断灵活，但闲聊/天气/地图/飞书四大场景覆盖率足够。</li>
+        <li><strong>未归类 MCP 工具兜底匹配</strong>：通过解析 <code>[MCP: 服务名]</code> + 工具名 token 命中，确保用户自定义 MCP 仍可达。</li>
+        <li><strong>身份指令放在末尾</strong>：LLM 更关注最近的指令，identity 放在全部历史之后比放在 system 前面更可靠地覆盖旧模型名。</li>
+        <li><strong>压缩只动 tool 消息</strong>：工具返回往往是大段 JSON/help 文本，截断后丢失的是细节不是意图。human/ai 消息保持完整，不破坏对话逻辑。</li>
+        <li><strong>MCP 缓存按指纹而非定时刷新</strong>：配置不变就不刷新，配置变了（保存/删除/导入）立即失效。简单、确定性高。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">10</span>待优化清单</h2>
+      <div class="todo">
+        <strong>问题 1：历史消息无 token 预算上限</strong><br/>
+        <code>_compact_history</code> 只截断旧 tool 消息，对 human/ai 无限制。几十轮后 human+ai 累积仍线性增长，无全局 token 预算控制。<br/>
+        优化方向：对 head 部分增加总字符预算（如 8000 字），超出则按从旧到新逐轮丢弃。
+      </div>
+      <div class="todo">
+        <strong>问题 2：尾部窗口按条数而非 token</strong><br/>
+        <code>_KEEP_TAIL=16</code> 是消息条数。如果最近一轮连续调用多个工具（如先 --help 再多次调用），尾部 tool 原文全保留，单轮可能顶几万 token。<br/>
+        优化方向：对 tail 也加 token 预算，或尾部 tool 超长时也截断。
+      </div>
+      <div class="todo">
+        <strong>问题 3：MCP 工具执行仍需每次重连</strong><br/>
+        工具列表已缓存，但实际执行工具时仍会新建连接（连一次 → call_tool → 断开）。stdio 类 Server 的 npx 冷启动开销仍在。<br/>
+        优化方向：维持长连接 session 池复用，或切换为 SSE/HTTP 传输避免进程启停。
+      </div>
+    </section>
+
+    <footer>
+      OpenUnknown 架构文档 · V1.2.0 · 2026-08-21 · Token 优化专项 · 工具按需绑定 · 提示词模板化
+    </footer>
+  </div>
+</body>
+</html>

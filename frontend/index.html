@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenUnknown</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <div class="logo">O</div>
+      <div class="name">OpenUnknown</div>
+    </div>
+    <div class="new-btn" id="newBtn">+ 新建对话</div>
+    <div class="session-list" id="sessionList"></div>
+    <div class="sidebar-footer">
+      <button class="mcp-entry-btn" id="openMcpModalBtn">
+        <span class="mcp-icon">⚙</span>
+        <span>MCP 扩展管理</span>
+        <span class="mcp-count-badge" id="mcpCountBadge">0</span>
+      </button>
+    </div>
+  </aside>
+
+  <main>
+    <header>
+      <div>
+        <h1>OpenUnknown</h1>
+        <div class="sub">基于 LangGraph · 支持 MCP 扩展</div>
+      </div>
+      <div class="model-picker">
+        <label for="modelSelect">模型</label>
+        <select id="modelSelect"></select>
+      </div>
+    </header>
+
+    <div id="chat">
+      <div class="container" id="messages">
+        <div class="empty" id="empty">
+          <h2>你好，我是 OpenUnknown</h2>
+          <div>有什么想问的，尽管开始吧。支持天气查询与自定义 MCP 工具。</div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div class="input-wrap">
+        <textarea id="input" rows="1" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+        <button class="send" id="send">发送</button>
+      </div>
+      <div class="hint">回车发送 · Shift + 回车换行</div>
+    </footer>
+  </main>
+
+  <!-- MCP 管理弹窗 -->
+  <div class="modal-backdrop" id="mcpModal" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h3>MCP 扩展配置</h3>
+          <span class="modal-subtitle">Model Context Protocol 客户端管理</span>
+        </div>
+        <button class="modal-close" id="closeMcpModalBtn">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="mcp-tabs">
+          <button class="mcp-tab active" id="tabListBtn">已配置服务</button>
+          <button class="mcp-tab" id="tabFormBtn">+ 添加服务</button>
+          <button class="mcp-tab" id="tabImportBtn">JSON 导入</button>
+        </div>
+
+        <!-- 列表视图 -->
+        <div class="mcp-tab-pane" id="paneList">
+          <div class="mcp-server-list" id="mcpServerList">
+            <div class="mcp-empty-tip">暂无配置的 MCP Server，点击上方「+ 添加服务」或「JSON 导入」添加。</div>
+          </div>
+        </div>
+
+        <!-- 表单视图 -->
+        <div class="mcp-tab-pane" id="paneForm" style="display: none;">
+          <form id="mcpForm" class="mcp-form">
+            <input type="hidden" id="mcpFormId" />
+            <div class="form-row">
+              <label>服务名称 <span class="req">*</span></label>
+              <input type="text" id="mcpName" placeholder="例如: filesystem / github / memory" required />
+            </div>
+
+            <div class="form-row">
+              <label>连接类型</label>
+              <select id="mcpType">
+                <option value="stdio">stdio (本地命令行进程)</option>
+                <option value="sse">sse / http (远程服务)</option>
+              </select>
+            </div>
+
+            <!-- stdio 配置区 -->
+            <div id="stdioFields">
+              <div class="form-row">
+                <label>执行命令 (Command) <span class="req">*</span></label>
+                <input type="text" id="mcpCommand" placeholder="例如: npx / python / uvx" />
+              </div>
+              <div class="form-row">
+                <label>命令参数 (每行一个或空格分隔)</label>
+                <textarea id="mcpArgs" rows="2" placeholder="-y&#10;@modelcontextprotocol/server-filesystem&#10;/Users/username/Desktop"></textarea>
+              </div>
+              <div class="form-row">
+                <label>环境变量 (JSON 键值对，可选)</label>
+                <textarea id="mcpEnv" rows="2" placeholder='{"GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_xxx"}'></textarea>
+              </div>
+            </div>
+
+            <!-- sse 配置区 -->
+            <div id="sseFields" style="display: none;">
+              <div class="form-row">
+                <label>Server URL <span class="req">*</span></label>
+                <input type="text" id="mcpUrl" placeholder="http://localhost:8080/sse" />
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" id="testFormBtn">测试连接</button>
+              <button type="submit" class="btn btn-primary" id="saveFormBtn">保存服务</button>
+            </div>
+            <div class="test-result-box" id="testResultBox" style="display: none;"></div>
+          </form>
+        </div>
+
+        <!-- JSON 导入视图 -->
+        <div class="mcp-tab-pane" id="paneImport" style="display: none;">
+          <div class="import-intro">
+            支持直接粘贴 Claude Desktop / Cursor 的 <code>claude_desktop_config.json</code> 中的 <code>mcpServers</code> 配置：
+          </div>
+          <textarea class="json-textarea" id="mcpJsonInput" rows="10" placeholder='{
+  "mcpServers": {
+    "sqlite": {
+      "command": "uvx",
+      "args": ["mcp-server-sqlite", "--db-path", "/path/to/db.sqlite"]
+    }
+  }
+}'></textarea>
+          <div class="form-actions" style="margin-top: 14px;">
+            <button type="button" class="btn btn-primary" id="doImportBtn">一键导入并保存</button>
+          </div>
+          <div class="test-result-box" id="importResultBox" style="display: none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

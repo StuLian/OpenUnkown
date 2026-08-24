@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenUnknown 架构文档 V1.1.0</title>
+  <style>
+    :root {
+      --bg: #0f1117; --panel: #161922; --panel-2: #1d212c; --border: #2a2f3d;
+      --text: #e6e8ee; --muted: #9aa0ac; --accent: #6c8cff; --accent-2: #8a6cff;
+      --green: #5fcf80; --orange: #ffb86c; --pink: #ff8a9a; --red: #ff6c7a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1200px 600px at 80% -10%, #1a1d29 0%, var(--bg) 55%);
+      color: var(--text); line-height: 1.7; min-height: 100vh;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+    header.hero { border-bottom: 1px solid var(--border); padding-bottom: 28px; margin-bottom: 40px; }
+    .badge {
+      display: inline-block; font-size: 12px; font-weight: 600;
+      padding: 4px 12px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; letter-spacing: 0.5px;
+    }
+    h1 { font-size: 34px; margin: 16px 0 8px; font-weight: 700; letter-spacing: 0.5px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    h2 {
+      font-size: 22px; margin: 48px 0 18px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border); font-weight: 600;
+      display: flex; align-items: center; gap: 10px;
+    }
+    h2 .num {
+      font-size: 13px; color: var(--accent); font-weight: 700;
+      width: 28px; height: 28px; border-radius: 8px;
+      background: rgba(108,140,255,0.12); border: 1px solid rgba(108,140,255,0.3);
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    h3 { font-size: 16px; margin: 24px 0 10px; color: var(--text); font-weight: 600; }
+    p { margin: 10px 0; color: #d4d7de; }
+    code {
+      font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      background: var(--panel-2); padding: 2px 6px; border-radius: 5px;
+      font-size: 13px; color: var(--accent); border: 1px solid var(--border);
+    }
+    pre {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px 18px; overflow-x: auto;
+      font-size: 13px; line-height: 1.6;
+    }
+    pre code { background: none; border: none; padding: 0; color: #d4d7de; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    td code { font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+    .stat .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .stat .value { font-size: 18px; font-weight: 600; }
+    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 5px; margin-right: 6px; font-weight: 600; }
+    .tag.blue { background: rgba(108,140,255,0.15); color: var(--accent); border: 1px solid rgba(108,140,255,0.3); }
+    .tag.green { background: rgba(95,207,128,0.15); color: var(--green); border: 1px solid rgba(95,207,128,0.3); }
+    .tag.orange { background: rgba(255,184,108,0.15); color: var(--orange); border: 1px solid rgba(255,184,108,0.3); }
+    .tag.pink { background: rgba(255,138,154,0.15); color: var(--pink); border: 1px solid rgba(255,138,154,0.3); }
+    .tag.purple { background: rgba(138,108,255,0.15); color: var(--accent-2); border: 1px solid rgba(138,108,255,0.3); }
+    .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0; font-size: 13px; }
+    .flow .step { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-weight: 500; }
+    .flow .arrow { color: var(--accent); font-weight: 700; }
+    ul { padding-left: 22px; } ul li { margin: 6px 0; color: #d4d7de; }
+    .meta-row { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .note { border-left: 3px solid var(--orange); background: rgba(255,184,108,0.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .warn { border-left: 3px solid var(--red); background: rgba(255,108,122,0.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .todo { border-left: 3px solid var(--orange); background: rgba(255,184,108,0.08); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .todo strong { color: var(--orange); }
+    footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+    .version-tag {
+      position: fixed; top: 16px; right: 20px; z-index: 50;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+      padding: 6px 14px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; box-shadow: 0 4px 16px rgba(108,140,255,0.35);
+    }
+    .mermaid { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin: 16px 0; text-align: center; overflow-x: auto; }
+    .changelog { font-size: 14px; }
+    .changelog li { margin: 8px 0; }
+    .changelog .new { color: var(--green); font-weight: 600; }
+    .changelog .opt { color: var(--orange); font-weight: 600; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: "dark",
+      themeVariables: {
+        primaryColor: "#1d212c", primaryBorderColor: "#6c8cff",
+        primaryTextColor: "#e6e8ee", lineColor: "#6c8cff",
+        fontFamily: "-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif"
+      }
+    });
+  </script>
+</head>
+<body>
+  <div class="version-tag">V1.1.0</div>
+  <div class="wrap">
+    <header class="hero">
+      <span class="badge">V1.1.0</span>
+      <h1>OpenUnknown 架构文档</h1>
+      <div class="subtitle">基于 LangGraph 的 Web 问答系统 · 多模型可选 · 流式 SSE · 多会话持久化 · FC + MCP + Skill 三层工具体系</div>
+      <div class="meta-row">文档版本 1.1.0 &nbsp;|&nbsp; 生成日期 2026-08-19</div>
+    </header>
+
+    <section>
+      <h2><span class="num">0</span>V1.1.0 变更摘要</h2>
+      <p>相较 V1.0.0（基础问答 + 多会话持久化），本次迭代围绕「让 Agent 真正能干活」展开，新增三层工具体系与模型选择能力。</p>
+      <ul class="changelog">
+        <li><span class="new">[新增]</span> <strong>FC（Function Calling）</strong>：内置工具包 <code>tools/</code>，首个工具 <code>get_weather</code> 走 Open-Meteo API。</li>
+        <li><span class="new">[新增]</span> <strong>MCP（Model Context Protocol）</strong>：拆出 <code>mcp/</code> 包（client/converter/manager），动态加载用户配置的 MCP Server 工具；前端管理 UI 支持增删改、启停、测试、JSON 导入。</li>
+        <li><span class="new">[新增]</span> <strong>Skill（飞书 CLI 集成）</strong>：把 <code>lark-cli</code> 包装成 <code>lark_cli</code> 工具，启动时拉取 27 个飞书 skill 描述注入 system prompt，让模型通过单一工具操作飞书全业务域。</li>
+        <li><span class="new">[新增]</span> <strong>模型选择</strong>：前端下拉选择器，后端按请求透传 <code>model</code> 到 graph config，同一会话不同轮次可用不同模型。</li>
+        <li><span class="new">[新增]</span> <strong>工具调用透明化</strong>：前端 badge 显示「调用中 → 已返回」，按 <code>tool_call_id</code> 精准匹配，支持同名工具并发多次调用。</li>
+        <li><span class="opt">[待优化]</span> MCP 每次请求都冷启动子进程拉工具列表，性能开销大。</li>
+        <li><span class="opt">[待优化]</span> 飞书 skill 描述每轮都拼进 system prompt，固定 token 开销约 3700 字。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">1</span>项目概览</h2>
+      <p>OpenUnknown 是一个以 <code>LangGraph</code> 为 Agent 框架搭建的 Web 侧问答系统。V1.1.0 在基础多轮问答之上，构建了 <strong>FC + MCP + Skill 三层工具体系</strong>，并支持运行时切换模型，让 Agent 既能调用本地内置工具，也能动态接入用户配置的外部 MCP Server，还能通过飞书 CLI 操作飞书全业务域。</p>
+      <div class="grid">
+        <div class="stat"><div class="label">Agent 框架</div><div class="value">LangGraph</div></div>
+        <div class="stat"><div class="label">大模型</div><div class="value">多模型可选</div></div>
+        <div class="stat"><div class="label">Web 框架</div><div class="value">FastAPI</div></div>
+        <div class="stat"><div class="label">流式协议</div><div class="value">SSE</div></div>
+        <div class="stat"><div class="label">持久化</div><div class="value">SQLite (WAL)</div></div>
+        <div class="stat"><div class="label">工具体系</div><div class="value">FC + MCP + Skill</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="num">2</span>技术栈与依赖</h2>
+      <p>所有依赖见 <code>requirements.txt</code>，Python 运行环境为 3.12。</p>
+      <table>
+        <thead><tr><th>依赖</th><th>版本</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td><code>fastapi</code></td><td>0.115.6</td><td>Web 服务框架，提供路由与 SSE 流式响应</td></tr>
+          <tr><td><code>uvicorn[standard]</code></td><td>0.34.0</td><td>ASGI 服务器</td></tr>
+          <tr><td><code>langgraph</code></td><td>0.2.60</td><td>Agent 图编排框架</td></tr>
+          <tr><td><code>langgraph-checkpoint</code></td><td>&gt;=2.0.4,&lt;3.0.0</td><td>checkpointer 抽象层</td></tr>
+          <tr><td><code>langgraph-checkpoint-sqlite</code></td><td>&gt;=2.0.0,&lt;3.0.0</td><td>SQLite 持久化 checkpointer</td></tr>
+          <tr><td><code>langchain-core</code></td><td>0.3.28</td><td>消息类型与 Runnable 基础</td></tr>
+          <tr><td><code>langchain-openai</code></td><td>0.2.14</td><td>通过 OpenAI 兼容协议接入通义千问系列</td></tr>
+          <tr><td><code>dashscope</code></td><td>1.20.14</td><td>提供 <code>get_default_api_key</code> 读取 ApiKey</td></tr>
+          <tr><td><code>aiosqlite</code></td><td>0.20.0</td><td>异步 SQLite 驱动，供 AsyncSqliteSaver 使用</td></tr>
+          <tr><td><code>pydantic</code></td><td>2.10.4</td><td>请求体校验与 MCP 工具参数 schema 动态构建</td></tr>
+          <tr><td><code>mcp</code></td><td>&gt;=1.0.0</td><td>MCP 协议客户端 SDK，连接外部 MCP Server</td></tr>
+          <tr><td><code>httpx</code></td><td>—</td><td>内置工具（天气）调用外部 API</td></tr>
+        </tbody>
+      </table>
+      <div class="note">ApiKey 通过 <code>from dashscope.common.api_key import get_default_api_key</code> 读取，无需在代码或环境变量中硬编码。模型 ApiKey 与飞书 CLI 凭证相互独立：前者服务大模型调用，后者由 <code>lark-cli</code> 自行管理（本地加密存储）。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">3</span>目录结构</h2>
+      <pre><code>OpenUnknown/
+├── requirements.txt          # 依赖清单
+├── docs/
+│   ├── architecture.html          # V1.0.0 架构文档
+│   └── architecture_V1.1.0.html   # 本文档
+├── backend/
+│   ├── config.py             # 配置：ApiKey、可选模型列表、BaseURL
+│   ├── main.py               # FastAPI 入口：路由 + SSE + MCP/模型 API
+│   ├── store.py              # 会话元数据 + MCP 配置存储(sessions/mcp_servers 表)
+│   └── agent/
+│       ├── llm.py            # ChatOpenAI 封装，按模型名缓存
+│       ├── graph.py          # LangGraph 图 + system prompt 动态拼接
+│       ├── tools/            # 【FC】内置工具包
+│       │   ├── __init__.py       # 工具注册表
+│       │   ├── weather.py        # get_weather (Open-Meteo)
+│       │   └── lark_cli.py       # 【Skill】飞书 CLI 包装 + skill 描述加载
+│       └── mcp/              # 【MCP】MCP 客户端包
+│           ├── __init__.py       # 对外暴露 get_enabled_mcp_tools 等
+│           ├── client.py         # stdio/sse 连接上下文管理
+│           ├── converter.py      # JSON Schema → Pydantic 模型
+│           └── manager.py        # 拉取工具列表、执行工具、组装 StructuredTool
+├── frontend/
+│   ├── index.html            # 页面骨架(含模型选择器)
+│   └── static/
+│       ├── style.css         # 样式(含工具 badge、模型选择器)
+│       └── app.js            # 会话/流式/MCP管理/模型选择/工具透明化
+└── data/
+    └── openunknown.db        # SQLite(sessions / checkpoints / writes / mcp_servers)
+</code></pre>
+    </section>
+
+    <section>
+      <h2><span class="num">4</span>架构设计</h2>
+      <h3>4.1 整体依赖图</h3>
+      <p>下图展示 V1.1.0 各模块与外部依赖的调用关系，重点标注了 FC / MCP / Skill 三层工具体系的位置。</p>
+      <pre class="mermaid">
+graph TD
+    subgraph Browser["浏览器"]
+        HTML["index.html<br/>(含模型选择器)"]
+        CSS["static/style.css"]
+        JS["static/app.js<br/>(会话/流式/MCP管理/工具badge)"]
+    end
+
+    subgraph Backend["FastAPI 服务"]
+        MAIN["main.py<br/>路由 + SSE + MCP/模型 API"]
+        CFG["config.py<br/>ApiKey / 可选模型列表"]
+        STORE["store.py<br/>会话 + MCP 配置存储"]
+        subgraph Agent["Agent 层"]
+            GRAPH["graph.py<br/>LangGraph 图 + prompt 动态拼接"]
+            LLM["llm.py<br/>ChatOpenAI(按模型缓存)"]
+            subgraph Tools["三层工具体系"]
+                FC["tools/<br/>FC: weather + lark_cli"]
+                MCP["mcp/<br/>MCP: client/converter/manager"]
+            end
+        end
+    end
+
+    subgraph Storage["持久化"]
+        DB[("openunknown.db<br/>sessions/checkpoints/mcp_servers")]
+    end
+
+    subgraph External["外部依赖"]
+        DASH["DashScope<br/>qwen-plus/max/turbo..."]
+        MCPS["外部 MCP Servers<br/>(stdio/sse)"]
+        LARK["lark-cli<br/>(飞书 CLI, 本地认证)"]
+        WEATHER["Open-Meteo API"]
+    end
+
+    JS -->|"fetch /api/chat, /api/mcp, /api/models"| MAIN
+    MAIN --> STORE
+    MAIN --> GRAPH
+    MAIN --> MCP
+    GRAPH --> LLM
+    GRAPH --> FC
+    GRAPH --> MCP
+    MCP -->|"JSON-RPC"| MCPS
+    FC -->|"子进程"| LARK
+    FC -->|"HTTP"| WEATHER
+    LLM -->|"OpenAI 兼容"| DASH
+    LLM --> CFG
+    GRAPH --> DB
+    STORE --> DB
+
+    classDef ext fill:#26202b,stroke:#ff8a9a,color:#e6e8ee;
+    classDef store fill:#1a2620,stroke:#5fcf80,color:#e6e8ee;
+    class DASH,MCPS,LARK,WEATHER ext;
+    class DB store;
+      </pre>
+
+      <h3>4.2 三层工具体系</h3>
+      <p>V1.1.0 的核心是 <strong>FC + MCP + Skill</strong> 三层工具体系，三者最终都汇入 <code>_get_all_tools()</code>，由 <code>llm.bind_tools()</code> 统一绑定给模型。</p>
+      <table>
+        <thead><tr><th>层级</th><th>位置</th><th>本质</th><th>触发方式</th><th>典型例子</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag blue">FC</span></td><td><code>tools/</code></td><td>原子函数</td><td>模型按 description 语义匹配</td><td><code>get_weather</code></td></tr>
+          <tr><td><span class="tag green">MCP</span></td><td><code>mcp/</code></td><td>外部协议工具</td><td>动态加载已启用 Server 的工具</td><td>高德地图 <code>maps_weather</code></td></tr>
+          <tr><td><span class="tag purple">Skill</span></td><td><code>tools/lark_cli.py</code></td><td>CLI 包装 + prompt 注入</td><td>单一工具 + skill 描述引导</td><td>飞书 <code>lark_cli</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>4.3 LangGraph 图结构</h3>
+      <p>图结构沿用 ReAct 循环：<code>chat</code> 节点绑定所有工具调用模型，<code>tools_condition</code> 判断是否路由到 <code>tools</code> 节点执行，执行后回到 <code>chat</code> 让模型总结。V1.1.0 的关键变化是 <code>_chat_node</code> 接收 <code>config</code> 参数，从中读取本轮模型名。</p>
+      <pre class="mermaid">
+graph LR
+    START(["START"]) --> CHAT["chat 节点<br/>读 config.model<br/>get_llm(model)<br/>bind_tools(FC+MCP)"]
+    CHAT --"有 tool_calls"--> TOOLS["tools 节点<br/>按 tool_call_id 执行<br/>FC/MCP/Skill 工具"]
+    TOOLS --> CHAT
+    CHAT --"无 tool_calls"--> END(["END"])
+    CP[("AsyncSqliteSaver<br/>thread_id = session_id")] -.保存/恢复.- CHAT
+      </pre>
+    </section>
+
+    <section>
+      <h2><span class="num">5</span>FC：内置工具包</h2>
+      <p><strong>FC（Function Calling）</strong>是最基础的工具层，每个工具是一个用 <code>@tool</code> 装饰的原子函数，模型按 description 语义匹配调用。</p>
+
+      <h3>5.1 包结构</h3>
+      <pre><code>backend/agent/tools/
+├── __init__.py      # 注册表：TOOLS = [get_weather, lark_cli]
+├── weather.py       # get_weather (Open-Meteo API)
+└── lark_cli.py      # 飞书 CLI 包装 (见第 7 节 Skill)
+</code></pre>
+      <p>新增内置工具的流程：在 <code>tools/</code> 下建模块 → 写 <code>@tool</code> 函数 → 在 <code>__init__.py</code> 的 <code>TOOLS</code> 列表注册。<code>graph.py</code> 只 <code>from backend.agent.tools import TOOLS</code>，不直接依赖具体工具文件。</p>
+
+      <h3>5.2 get_weather 工具</h3>
+      <p>走 Open-Meteo 的免费天气 API：先用 geocoding-api 把城市名转经纬度，再调 forecast 拿当前天气。返回结构化文本（地点/天气/气温/湿度/风速），WMO 天气代码映射为中文。</p>
+      <div class="note">description 里明确写了「用户问天气、气温、是否下雨时必须调用本工具，不要凭记忆编造」，这是引导模型主动调用的关键。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">6</span>MCP：动态外部工具</h2>
+      <p><strong>MCP（Model Context Protocol）</strong>让用户能配置任意外部 MCP Server，Agent 启动时动态拉取其工具列表并转成 LangChain <code>StructuredTool</code>，与内置工具一起绑定给模型。</p>
+
+      <h3>6.1 包结构</h3>
+      <table>
+        <thead><tr><th>文件</th><th>职责</th></tr></thead>
+        <tbody>
+          <tr><td><code>mcp/__init__.py</code></td><td>对外暴露 <code>get_enabled_mcp_tools</code>、<code>test_mcp_server</code>、<code>execute_mcp_tool</code></td></tr>
+          <tr><td><code>mcp/client.py</code></td><td>连接上下文管理，支持 <code>stdio</code>（本地子进程）和 <code>sse/http</code>（远程服务）两种方式</td></tr>
+          <tr><td><code>mcp/converter.py</code></td><td>把 MCP 工具的 JSON Schema 转成 Pydantic 模型，用于参数校验和文档生成</td></tr>
+          <tr><td><code>mcp/manager.py</code></td><td>核心逻辑：拉取工具列表、执行工具调用、组装 <code>StructuredTool</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>6.2 加载流程</h3>
+      <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant G as graph.py (_chat_node)
+    participant M as mcp/manager.py
+    participant C as mcp/client.py
+    participant S as SQLite (mcp_servers)
+    participant MS as 外部 MCP Server
+
+    G->>M: get_enabled_mcp_tools()
+    M->>S: list_mcp_servers(enabled_only=True)
+    S-->>M: 已启用 Server 配置列表
+    loop 每个 Server
+        M->>C: connect_server(cfg)
+        C->>MS: 启动子进程 / 连 SSE
+        C->>MS: session.initialize()
+        M->>MS: session.list_tools()
+        MS-->>M: 工具元数据(name/desc/schema)
+        M->>M: converter.create_args_schema()
+        M->>M: StructuredTool(name, desc, coroutine)
+    end
+    M-->>G: BaseTool 列表
+    G->>G: bind_tools(内置 + MCP)
+      </pre>
+
+      <h3>6.3 调用流程</h3>
+      <p>模型在 <code>chat</code> 节点决定调用某个 MCP 工具后，LangGraph 路由到 <code>tools</code> 节点，按 <code>tool_call_id</code> 找到对应 <code>StructuredTool</code> 执行。执行时闭包会<strong>再建一次连接</strong>调 <code>session.call_tool()</code>，拿到结果后拼成 <code>ToolMessage</code> 回到 <code>chat</code> 节点。</p>
+      <div class="warn"><strong>待优化问题 1</strong>：当前每次请求都会重新连接所有已启用 MCP Server 拉取工具列表（冷启动 <code>npx</code> 子进程），开销大。一次完整 MCP 调用，同一个 Server 会被连接 2 次（拉列表 + 执行）。优化方向：启动时拉一次缓存工具列表，定时刷新，执行时再连。</div>
+
+      <h3>6.4 工具描述注入来源标签</h3>
+      <p>为了让模型区分同名工具归属，MCP 工具的 description 前会自动加 <code>[MCP: 服务名]</code> 前缀。例如高德的天气工具描述为 <code>[MCP: amap-maps] 根据城市名称或者标准adcode查询指定城市的天气</code>，模型看到「用高德查」时就能优先匹配。</p>
+
+      <h3>6.5 前端管理 UI</h3>
+      <p>侧边栏底部「MCP 扩展管理」入口，弹窗支持：已配置服务列表（启停/测试/编辑/删除）、添加服务（stdio/sse 表单）、JSON 批量导入（兼容 Claude Desktop / Cursor 格式）。配置持久化在 <code>mcp_servers</code> 表。</p>
+    </section>
+
+    <section>
+      <h2><span class="num">7</span>Skill：飞书 CLI 集成</h2>
+      <p><strong>Skill</strong>层处理「一个 CLI 暴露大量能力」的场景。飞书 <code>lark-cli</code> 覆盖 IM/日历/文档/表格/任务/邮件等 27 个业务域，如果每个能力做成独立工具会爆炸，所以采用<strong>单一工具 + skill 描述注入</strong>的方式。</p>
+
+      <h3>7.1 设计思路</h3>
+      <ul>
+        <li><strong>单一工具 <code>lark_cli</code></strong>：接收 <code>command</code> 字符串，通过子进程执行 <code>lark-cli</code> 命令。</li>
+        <li><strong>skill 描述注入 system prompt</strong>：启动时调 <code>lark-cli skills list</code> 拉取 27 个 skill 描述（约 3700 字），拼进 system prompt，让模型知道有哪些 domain 可用、每个 domain 对应什么能力。</li>
+        <li><strong>认证独立</strong>：飞书凭证由 <code>lark-cli</code> 自己管理（本地加密存储，<code>~/Library/Application Support/lark-cli/</code>），与 OpenUnknown 的 ApiKey 完全解耦。Agent 用「当前登录用户」的身份操作飞书。</li>
+      </ul>
+
+      <h3>7.2 调用链路</h3>
+      <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant G as graph.py
+    participant T as lark_cli 工具
+    participant LC as lark-cli 进程
+    participant FS as 飞书 OpenAPI
+
+    Note over G: system prompt 已含 27 个 skill 描述
+    U->>G: "读一下这个飞书文档"
+    G->>G: 模型匹配 domain=docs
+    G->>T: lark_cli(command="docs +fetch --doc <url> --doc-format markdown")
+    T->>LC: subprocess: lark-cli docs +fetch ...
+    LC->>LC: 读取本地加密 token
+    LC->>FS: 用 user identity 请求
+    FS-->>LC: 文档内容
+    LC-->>T: JSON 输出
+    T-->>G: 文档文本
+    G->>U: 模型总结回复
+      </pre>
+
+      <h3>7.3 prompt 拼接策略</h3>
+      <p><code>_get_system_prompt(model_name)</code> 把三部分拼起来：</p>
+      <div class="flow">
+        <span class="step">base prompt<br/>(含模型身份, 每次构建)</span>
+        <span class="arrow">+</span>
+        <span class="step">lark skill 描述<br/>(启动时缓存, 约 3700 字)</span>
+        <span class="arrow">=</span>
+        <span class="step">完整 system prompt</span>
+      </div>
+      <p>贵的、跟模型无关的部分（lark skill 列表）缓存一次；便宜的、跟模型有关的部分（身份声明）每次构建，保证切模型后身份问答准确。</p>
+      <div class="warn"><strong>待优化问题 2</strong>：飞书 skill 描述每轮请求都会拼进 system prompt 发给模型，固定 token 开销约 3700 字。优化方向：按需注入（用户消息出现飞书关键词时才拼）、精简描述（每条压到 30 字）、或改成工具描述（模型需要时再调工具拉详细能力）。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">8</span>模型选择</h2>
+      <p>V1.1.0 支持运行时切换模型，<strong>请求级</strong>而非会话级——同一对话不同轮次可用不同模型。</p>
+
+      <h3>8.1 可选模型</h3>
+      <p>在 <code>config.py</code> 的 <code>AVAILABLE_MODELS</code> 列表中定义，当前包含通义千问系列：</p>
+      <table>
+        <thead><tr><th>模型 id</th><th>展示名</th><th>定位</th></tr></thead>
+        <tbody>
+          <tr><td><code>qwen3.7-plus</code></td><td>Qwen3.7 Plus（均衡）</td><td>默认模型</td></tr>
+          <tr><td><code>qwen-max</code></td><td>Qwen Max（最强）</td><td>最强能力</td></tr>
+          <tr><td><code>qwen-plus</code></td><td>Qwen Plus</td><td>—</td></tr>
+          <tr><td><code>qwen-turbo</code></td><td>Qwen Turbo（快速）</td><td>低延迟</td></tr>
+        </tbody>
+      </table>
+
+      <h3>8.2 切换链路</h3>
+      <pre class="mermaid">
+graph LR
+    SEL["前端下拉选择器<br/>localStorage 持久化"] -->|"POST /api/chat<br/>{message, session_id, model}"| MAIN["main.py"]
+    MAIN -->|"is_valid_model 校验<br/>非法回退 DEFAULT_MODEL"| CFG["config.configurable.model"]
+    CFG --> CHAT["_chat_node<br/>model_name = config.configurable.model"]
+    CHAT --> LLM["get_llm(model_name)<br/>lru_cache 按模型缓存"]
+    CHAT --> PROMPT["_get_system_prompt(model_name)<br/>prompt 注入当前模型名"]
+      </pre>
+
+      <h3>8.3 关键实现点</h3>
+      <ul>
+        <li><strong><code>get_llm(model_name)</code></strong>：按模型名参数化，<code>lru_cache(maxsize=8)</code> 让每个模型实例只构建一次，切换很快。</li>
+        <li><strong>身份指令放在历史消息之后</strong>：在 <code>_chat_node</code> 里，先发 system prompt + 历史消息，再插一条「【本轮实际模型】xxx」的 SystemMessage，避免旧回复里的模型名覆盖本轮选择。</li>
+        <li><strong>前端回显实际模型</strong>：每轮回复下方显示「模型 xxx · 本轮 Tokens：...」，方便确认后端真正用的是哪个模型。</li>
+        <li><strong>后端兜底校验</strong>：<code>chat()</code> 端点用 <code>is_valid_model()</code> 校验，非法 model 回退到 <code>DEFAULT_MODEL</code>。</li>
+      </ul>
+      <div class="note">历史消息（含之前模型生成的回复）仍会作为上下文保留，这是 LangGraph checkpointer 的标准行为。切换模型只影响本轮生成，不改写历史。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">9</span>工具调用透明化</h2>
+      <p>为了让用户知道 Agent 是否真的调了工具，前端在回答气泡上方显示工具调用 badge，状态从「调用中」变「已返回」。</p>
+
+      <h3>9.1 SSE 事件</h3>
+      <p>后端在 <code>_stream_answer</code> 里监听 <code>tools</code> 和 <code>chat</code> 节点，推送两类事件：</p>
+      <table>
+        <thead><tr><th>事件</th><th>触发时机</th><th>字段</th></tr></thead>
+        <tbody>
+          <tr><td><code>{"tool_call": {id, tool, args}}</code></td><td>模型决定调用工具时</td><td><code>id</code>=tool_call_id, <code>tool</code>=工具名</td></tr>
+          <tr><td><code>{"tool_result": {id, tool, output}}</code></td><td>工具执行完毕时</td><td><code>output</code>截前 300 字</td></tr>
+        </tbody>
+      </table>
+
+      <h3>9.2 前端 badge 匹配</h3>
+      <p>前端按 <strong><code>tool_call_id</code></strong> 匹配（不是按工具名），支持同名工具并发多次调用。流式下同一个 tool_call 会分多个 chunk 到达，前端按 id 去重，只在首次到达时创建 badge。</p>
+      <div class="note">早期版本按工具名匹配，导致同一轮多次调用 <code>lark_cli</code> 时，后创建的 badge 覆盖先创建的，先创建的一直卡在「调用中」。改为按 id 匹配后修复。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">10</span>流式输出是怎么做的</h2>
+      <p>采用 <strong>SSE（Server-Sent Events）</strong>而非 WebSocket，因为问答只需服务端单向推送，SSE 基于普通 HTTP、实现更轻，且配合 LangGraph 的 <code>stream_mode="messages"</code> 天然就是 token 级增量。V1.1.0 在此基础上额外推送工具调用事件。</p>
+
+      <h3>10.1 时序图</h3>
+      <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant U as 浏览器 (app.js)
+    participant F as FastAPI (main.py)
+    participant G as LangGraph (graph.py)
+    participant M as 所选模型
+
+    U->>F: POST /api/chat { message, session_id, model }
+    F-->>U: data: {"model": "qwen-turbo"}
+    F->>G: graph.astream(stream_mode="messages")
+    G->>M: await llm.ainvoke(messages)
+    G-->>F: tool_calls chunk
+    F-->>U: data: {"tool_call": {id, tool, args}}
+    G-->>F: tools 节点 ToolMessage
+    F-->>U: data: {"tool_result": {id, tool, output}}
+    loop 每个 token 增量
+        M-->>G: token chunk
+        G-->>F: (chunk, meta)
+        F-->>U: data: {"delta": "..."}
+        U->>U: 累加渲染(打字机效果)
+    end
+    F-->>U: data: {"usage": {...}}
+    F-->>U: data: [DONE]
+      </pre>
+
+      <h3>10.2 关键实现点</h3>
+      <ul>
+        <li>后端 <code>graph.astream(stream_mode="messages")</code> 逐 token 产出增量，只保留 <code>chat</code> 节点的内容推给前端。</li>
+        <li>每个增量打包为 <code>data: {"delta": "..."}\n\n</code> 的 SSE 消息，用 <code>StreamingResponse(media_type="text/event-stream")</code> 持续写入连接。</li>
+        <li>前端用 <code>resp.body.getReader()</code> 循环读取字节流，按 <code>\n</code> 拆行解析；用 <code>buffer</code> 处理跨分片的"半行"问题。</li>
+        <li>结束前回传 <code>{"usage": {...}}</code> token 用量，最后发 <code>data: [DONE]</code> 收尾。</li>
+      </ul>
+
+      <h3>10.3 中断机制</h3>
+      <p>前端用 <code>AbortController</code> 中断 fetch；后端在每个 chunk 前检查 <code>request.is_disconnected()</code>，客户端断开即 <code>break</code>，async 生成器关闭会真正取消底层模型请求，避免空跑浪费 token。</p>
+    </section>
+
+    <section>
+      <h2><span class="num">11</span>持久化是怎么做的</h2>
+      <p>所有持久化数据集中存于 <code>data/openunknown.db</code>（SQLite，开启 WAL 模式），由两套逻辑共用同一个数据库文件管理，以 <code>session_id</code> 作为贯穿两者的关联键。V1.1.0 新增 <code>mcp_servers</code> 表存 MCP 配置。</p>
+
+      <h3>11.1 三类数据</h3>
+      <table>
+        <thead><tr><th>数据</th><th>管理者</th><th>数据表</th><th>作用</th></tr></thead>
+        <tbody>
+          <tr><td>对话状态</td><td>AsyncSqliteSaver</td><td><code>checkpoints</code> / <code>writes</code></td><td>完整多轮对话状态，支持恢复上下文</td></tr>
+          <tr><td>会话元数据</td><td>store.py</td><td><code>sessions</code></td><td>标题与时间戳，用于侧边栏列表与排序</td></tr>
+          <tr><td>MCP 配置</td><td>store.py</td><td><code>mcp_servers</code></td><td>用户配置的 MCP Server（name/type/command/url/enabled 等）</td></tr>
+        </tbody>
+      </table>
+
+      <h3>11.2 关键点</h3>
+      <ul>
+        <li><strong>thread_id = session_id</strong>：checkpoint 以 <code>thread_id</code> 隔离会话，与元数据表的 <code>id</code> 一一对应。</li>
+        <li><strong>首条消息自动建会话</strong>：<code>/api/chat</code> 收到消息时 <code>create_session</code>（已存在则忽略），标题取首条消息前 24 字。</li>
+        <li><strong>异步 checkpointer</strong>：<code>AsyncSqliteSaver</code> 配合 <code>aiosqlite</code>，与节点的 <code>ainvoke</code>、接口的 <code>astream</code> 全链路异步。</li>
+        <li><strong>删除级联</strong>：删除会话时同时清理 <code>sessions</code> 与 checkpoint 表中对应 <code>thread_id</code> 的数据。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">12</span>API 接口</h2>
+      <table>
+        <thead><tr><th>方法</th><th>路径</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag blue">GET</span></td><td><code>/</code></td><td>返回前端页面 index.html</td></tr>
+          <tr><td><span class="tag green">POST</span></td><td><code>/api/chat</code></td><td>流式问答，body 含 <code>model</code>，SSE 返回 model/tool_call/tool_result/delta/usage/[DONE]</td></tr>
+          <tr><td><span class="tag blue">GET</span></td><td><code>/api/models</code></td><td>返回可选模型列表与默认模型</td></tr>
+          <tr><td><span class="tag blue">GET</span></td><td><code>/api/sessions</code></td><td>会话列表，按最近更新倒序</td></tr>
+          <tr><td><span class="tag green">POST</span></td><td><code>/api/sessions</code></td><td>新建空会话，返回 id</td></tr>
+          <tr><td><span class="tag pink">DELETE</span></td><td><code>/api/sessions/{id}</code></td><td>删除会话及其 checkpoint 数据</td></tr>
+          <tr><td><span class="tag blue">GET</span></td><td><code>/api/sessions/{id}/messages</code></td><td>从 checkpoint 恢复历史消息</td></tr>
+          <tr><td><span class="tag blue">GET</span></td><td><code>/api/mcp/servers</code></td><td>获取所有 MCP Server 配置</td></tr>
+          <tr><td><span class="tag green">POST</span></td><td><code>/api/mcp/servers</code></td><td>保存或更新单个 MCP Server 配置</td></tr>
+          <tr><td><span class="tag pink">DELETE</span></td><td><code>/api/mcp/servers/{id}</code></td><td>删除指定 MCP Server 配置</td></tr>
+          <tr><td><span class="tag orange">PATCH</span></td><td><code>/api/mcp/servers/{id}/toggle</code></td><td>切换 MCP Server 启用状态</td></tr>
+          <tr><td><span class="tag green">POST</span></td><td><code>/api/mcp/test</code></td><td>测试连接 MCP Server 并获取其工具列表</td></tr>
+          <tr><td><span class="tag green">POST</span></td><td><code>/api/mcp/import</code></td><td>从标准 JSON 批量导入 MCP Servers</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2><span class="num">13</span>启动方式</h2>
+      <pre><code># 安装依赖
+pip install -r requirements.txt
+
+# 启动服务
+uvicorn backend.main:app --host 127.0.0.1 --port 8000
+
+# 开发模式(代码变更自动重载)
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload</code></pre>
+      <p>启动后访问 <code>http://127.0.0.1:8000</code> 即可使用。若要用飞书能力，需先安装 <code>lark-cli</code> 并完成 <code>lark-cli auth login</code> 授权。</p>
+    </section>
+
+    <section>
+      <h2><span class="num">14</span>关键设计决策</h2>
+      <ul>
+        <li><strong>三层工具体系</strong>：FC 处理原子能力、MCP 处理外部协议工具、Skill 处理「一个 CLI 暴露大量能力」的场景，三者最终都汇入 <code>bind_tools</code>。</li>
+        <li><strong>SSE 而非 WebSocket</strong>：问答为单向推送场景，SSE 更轻量、契合 LangGraph stream_mode 天然增量。</li>
+        <li><strong>模型选择请求级</strong>：同一会话不同轮次可用不同模型，<code>get_llm</code> 按模型名缓存，切换零成本。</li>
+        <li><strong>身份指令放在历史消息之后</strong>：避免旧回复里的模型名覆盖本轮选择，保证切模型后身份问答准确。</li>
+        <li><strong>工具 badge 按 tool_call_id 匹配</strong>：支持同名工具并发多次调用，不互相覆盖。</li>
+        <li><strong>飞书认证独立</strong>：由 <code>lark-cli</code> 自行管理本地加密凭证，OpenUnknown 不碰飞书密钥。</li>
+        <li><strong>异步贯穿</strong>：节点 <code>ainvoke</code> + <code>astream</code> + <code>AsyncSqliteSaver</code>，保证客户端断开可真正中断底层请求。</li>
+        <li><strong>消除 fallback 思路</strong>：ApiKey 统一从 <code>get_default_api_key</code> 读取，未配置即显式报错，不堆叠兜底逻辑。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">15</span>待优化清单</h2>
+      <div class="todo">
+        <strong>问题 1：MCP 每次请求都冷启动子进程拉工具列表</strong><br/>
+        现状：每次 <code>_chat_node</code> 调用都会重新连接所有已启用 MCP Server 拉取工具列表，<code>npx</code> 冷启动 Node 进程开销大；一次完整 MCP 调用同一 Server 会被连接 2 次（拉列表 + 执行）。<br/>
+        优化方向：启动时拉一次缓存工具列表，定时刷新；执行时再连。或维持长连接复用 session。
+      </div>
+      <div class="todo">
+        <strong>问题 2：飞书 skill 描述每轮都拼进 system prompt</strong><br/>
+        现状：约 3700 字的 skill 描述每轮请求都拼进 system prompt 发给模型，固定 token 开销。从实测看，三轮短问答输入 token 都在 4.7 万左右，其中包含这部分固定开销 + 旧会话历史。<br/>
+        优化方向：按需注入（用户消息出现飞书关键词时才拼）、精简描述（每条压到 30 字）、或改成工具描述（模型需要时再调工具拉详细能力，但会多一轮工具调用）。
+      </div>
+    </section>
+
+    <footer>
+      OpenUnknown 架构文档 · V1.1.0 · 2026-08-19 · 基于 LangGraph + 多模型 + FC/MCP/Skill
+    </footer>
+  </div>
+</body>
+</html>
