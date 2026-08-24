@@ -28,6 +28,21 @@ logger = logging.getLogger(__name__)
 DB_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "openunknown.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+# 单轮对话最多允许的工具执行次数，超过后强制模型停止调用工具直接作答，
+# 避免工具反复失败(如搜索被限流)时模型无限重试、触发 LangGraph 的 recursion limit。
+MAX_TOOL_CALLS = 8
+
+
+def _tool_calls_this_turn(messages: list) -> int:
+    """统计本轮(最近一条 human 消息之后)已执行的工具调用次数。"""
+    count = 0
+    for msg in reversed(messages):
+        if getattr(msg, "type", None) == "human":
+            break
+        if getattr(msg, "type", None) == "tool":
+            count += 1
+    return count
+
 # 关键词预筛：按用户当轮意图决定这一轮绑定哪些工具，避免闲聊也带上全部工具 schema。
 # 工具 schema 是每轮固定 token 大头（高德一家就 12 个），命中才绑，能显著降低底噪。
 _WEATHER_KWS = (
@@ -44,6 +59,11 @@ _FEISHU_KWS = (
     "sheet", "日历", "日程", "会议", "待办", "任务", "邮件", "邮箱",
     "云盘", "云空间", "知识库", "妙记", "审批", "通讯录", "考勤",
     "幻灯片", "画板", "okr", "feishu.cn", "larksuite",
+)
+_BROWSE_KWS = (
+    "网页", "网站", "网址", "链接", "打开网页", "浏览", "抓取", "爬取", "访问网页",
+    "上网", "在线", "互联网", "搜索", "检索", "搜一下", "搜索引擎", "热搜",
+    "新闻", "资讯", "最新消息", "web", "url", "http", "browse", "search", "fetch",
 )
 
 
@@ -89,6 +109,9 @@ def _select_tools(tools: list, text: str, want: dict) -> list:
                 selected.append(t)
         elif name == "lark_cli":
             if want["feishu"]:
+                selected.append(t)
+        elif name in ("browser_fetch", "browser_search"):
+            if want["browse"]:
                 selected.append(t)
         elif name.startswith("maps_"):
             if want["map"] or (want["weather"] and "weather" in name):
@@ -187,8 +210,10 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
     """核心问答节点：动态绑定当前可用工具，把历史消息交给所选模型生成回复。
 
     模型由上层通过 config.configurable.model 指定，使用异步调用便于客户端断开时中断请求。
+    本轮工具调用次数达到上限后不再绑定工具，强制模型直接作答，保证图一定能收敛。
     """
     model_name = (config.get("configurable") or {}).get("model") or DEFAULT_MODEL
+    force_answer = _tool_calls_this_turn(state["messages"]) >= MAX_TOOL_CALLS
 
     # 按本轮用户意图预筛工具，闲聊时不绑工具，省掉全部工具 schema 的固定 token
     user_text = _latest_user_text(state["messages"]).lower()
@@ -196,9 +221,10 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
         "weather": _hit(user_text, _WEATHER_KWS),
         "map": _hit(user_text, _MAP_KWS),
         "feishu": _hit(user_text, _FEISHU_KWS),
+        "browse": _hit(user_text, _BROWSE_KWS),
     }
     all_tools = await _get_all_tools()
-    bound_tools = _select_tools(all_tools, user_text, want)
+    bound_tools = [] if force_answer else _select_tools(all_tools, user_text, want)
 
     llm = get_llm(model_name)
     if bound_tools:
@@ -210,6 +236,11 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
     )
     history = _compact_history(list(state["messages"]))
     messages = [SystemMessage(content=system_prompt), *history, identity]
+    if force_answer:
+        messages.append(SystemMessage(
+            content="已连续调用多次工具仍未得到最终答案。现在必须停止调用工具，"
+            "直接基于已获取的信息给出最终回答，不要再次调用任何工具。"
+        ))
     logger.info(
         "[LLM 输入] 历史压缩 %d 字 -> %d 字（checkpoint 原文未改）；本轮绑定工具 %d/%d",
         _messages_chars(state["messages"]),
