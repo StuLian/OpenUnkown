@@ -68,6 +68,11 @@ _BROWSE_KWS = (
     "股票", "股价", "行情", "大盘", "上证", "深证", "涨跌", "涨幅", "跌幅",
     "市值", "财报", "美股", "港股", "a股", "收盘", "开盘", "证券",
 )
+_HOTEL_KWS = (
+    "酒店", "hotel", "宾馆", "旅馆", "住宿", "民宿", "订房", "订酒店", "入住",
+    "房型", "西雅图", "seattle", "客房", "泳池", "健身房", "会议室", "含早",
+    "机场酒店", "海景", "套房", "前台", "退房",
+)
 
 
 def _hit(text: str, kws: tuple[str, ...]) -> bool:
@@ -118,6 +123,9 @@ def _select_tools(tools: list, text: str, want: dict) -> list:
                 selected.append(t)
         elif name.startswith("maps_"):
             if want["map"] or (want["weather"] and "weather" in name):
+                selected.append(t)
+        elif name == "search_hotels":
+            if want["hotel"]:
                 selected.append(t)
         elif _mcp_tool_hit(t, text):
             selected.append(t)
@@ -227,6 +235,7 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
         "map": _hit(user_text, _MAP_KWS),
         "feishu": _hit(user_text, _FEISHU_KWS),
         "browse": _hit(user_text, _BROWSE_KWS),
+        "hotel": _hit(user_text, _HOTEL_KWS),
     }
     all_tools = await _get_all_tools()
     bound_tools = [] if force_answer else _select_tools(all_tools, user_text, want)
