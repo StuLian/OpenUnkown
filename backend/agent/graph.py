@@ -20,7 +20,7 @@ from backend.agent.mcp import get_enabled_mcp_tools
 from backend.agent.prompts import IDENTITY_PROMPT, LARK_SECTION, SYSTEM_PROMPT
 from backend.agent.tools import TOOLS as BUILTIN_TOOLS
 from backend.agent.tools.lark_cli import load_skill_descriptions
-from backend.config import APP_NAME, DEFAULT_MODEL
+from backend.config import APP_NAME, DEFAULT_MODE, DEFAULT_MODEL, mode_enables_thinking
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,9 @@ _BROWSE_KWS = (
     "网页", "网站", "网址", "链接", "打开网页", "浏览", "抓取", "爬取", "访问网页",
     "上网", "在线", "互联网", "搜索", "检索", "搜一下", "搜索引擎", "热搜",
     "新闻", "资讯", "最新消息", "web", "url", "http", "browse", "search", "fetch",
+    # 股票/财经类：无专门行情工具，统一路由到 browser_search 联网检索
+    "股票", "股价", "行情", "大盘", "上证", "深证", "涨跌", "涨幅", "跌幅",
+    "市值", "财报", "美股", "港股", "a股", "收盘", "开盘", "证券",
 )
 
 
@@ -213,6 +216,8 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
     本轮工具调用次数达到上限后不再绑定工具，强制模型直接作答，保证图一定能收敛。
     """
     model_name = (config.get("configurable") or {}).get("model") or DEFAULT_MODEL
+    mode = (config.get("configurable") or {}).get("mode") or DEFAULT_MODE
+    enable_thinking = mode_enables_thinking(mode)
     force_answer = _tool_calls_this_turn(state["messages"]) >= MAX_TOOL_CALLS
 
     # 按本轮用户意图预筛工具，闲聊时不绑工具，省掉全部工具 schema 的固定 token
@@ -226,7 +231,7 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
     all_tools = await _get_all_tools()
     bound_tools = [] if force_answer else _select_tools(all_tools, user_text, want)
 
-    llm = get_llm(model_name)
+    llm = get_llm(model_name, enable_thinking=enable_thinking)
     if bound_tools:
         llm = llm.bind_tools(bound_tools)
     system_prompt = await _get_system_prompt(include_lark=want["feishu"])
@@ -242,11 +247,13 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
             "直接基于已获取的信息给出最终回答，不要再次调用任何工具。"
         ))
     logger.info(
-        "[LLM 输入] 历史压缩 %d 字 -> %d 字（checkpoint 原文未改）；本轮绑定工具 %d/%d",
+        "[LLM 输入] 历史压缩 %d 字 -> %d 字（checkpoint 原文未改）；本轮绑定工具 %d/%d；模式=%s(思考=%s)",
         _messages_chars(state["messages"]),
         _messages_chars(history),
         len(bound_tools),
         len(all_tools),
+        mode,
+        enable_thinking,
     )
     _log_llm_input(model_name, messages, [t.name for t in bound_tools])
     response = await llm.ainvoke(messages)
@@ -283,10 +290,11 @@ async def _tools_node(state: MessagesState) -> dict:
 
 
 class GraphConfig(TypedDict):
-    """图运行时配置：thread_id 由 checkpointer 使用，model 为本轮所选模型。"""
+    """图运行时配置：thread_id 由 checkpointer 使用，model/mode 为本轮所选模型与模式。"""
 
     thread_id: str
     model: str
+    mode: str
 
 
 # 异步 checkpointer 单例(需异步 setup，故用模块级缓存而非 lru_cache)

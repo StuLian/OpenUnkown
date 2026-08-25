@@ -1,6 +1,7 @@
-// OpenUnknown 前端逻辑：多会话管理 + 流式问答 + MCP 扩展管理 + 模型选择
+// OpenUnknown 前端逻辑：多会话管理 + 流式问答 + MCP 扩展管理 + 模型/模式选择
 const LS_KEY = "openunknown:current_session";
 const LS_MODEL_KEY = "openunknown:model";
+const LS_MODE_KEY = "openunknown:mode";
 const messagesEl = document.getElementById("messages");
 const inputEl = document.getElementById("input");
 const sendBtn = document.getElementById("send");
@@ -8,6 +9,7 @@ const chatEl = document.getElementById("chat");
 const sessionListEl = document.getElementById("sessionList");
 const newBtn = document.getElementById("newBtn");
 const modelSelect = document.getElementById("modelSelect");
+const modeSelect = document.getElementById("modeSelect");
 
 // MCP 相关 DOM 元素
 const mcpModal = document.getElementById("mcpModal");
@@ -47,6 +49,7 @@ let controller = null;
 let currentSessionId = localStorage.getItem(LS_KEY) || newSessionId();
 let mcpServersCache = [];
 let currentModel = localStorage.getItem(LS_MODEL_KEY) || "";
+let currentMode = localStorage.getItem(LS_MODE_KEY) || "";
 
 function newSessionId() {
   return "sess-" + (crypto.randomUUID
@@ -216,6 +219,10 @@ async function send() {
   let usage = null;
   let stopped = false;
   let usedModel = modelSelect.value || currentModel;
+  let usedMode = modeSelect.value || currentMode;
+  // 思考模式：累积 reasoning_content 并在气泡上方展示可折叠的思考过程
+  let thinking = "";
+  let thinkEl = null;
   // 记录每个工具 badge 节点，key 为 tool_call_id（同名工具可能并发多次调用）
   const toolBadges = {};
 
@@ -225,7 +232,12 @@ async function send() {
     const resp = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, session_id: currentSessionId, model: modelSelect.value || currentModel }),
+      body: JSON.stringify({
+        message: text,
+        session_id: currentSessionId,
+        model: modelSelect.value || currentModel,
+        mode: modeSelect.value || currentMode,
+      }),
       signal: controller.signal,
     });
 
@@ -253,6 +265,28 @@ async function send() {
         }
         if (payload.usage) { usage = payload.usage; continue; }
         if (payload.model) { usedModel = payload.model; continue; }
+        if (payload.mode) { usedMode = payload.mode; continue; }
+
+        // 思考过程：累积推理增量，用 <details> 折叠展示在答案上方
+        if (payload.thinking) {
+          thinking += payload.thinking;
+          if (!thinkEl) {
+            thinkEl = document.createElement("details");
+            thinkEl.className = "thinking";
+            const summary = document.createElement("summary");
+            const body = document.createElement("div");
+            body.className = "thinking-body";
+            thinkEl.appendChild(summary);
+            thinkEl.appendChild(body);
+            // 插到工具 trace 之前，保持“先思考、再调用工具、最后作答”的顺序
+            messagesEl.insertBefore(thinkEl, traceEl);
+          }
+          const summary = thinkEl.querySelector("summary");
+          summary.innerHTML = '<span class="thinking-dot"></span>思考过程<span class="thinking-hint">思考中…</span>';
+          thinkEl.querySelector(".thinking-body").textContent = thinking;
+          scrollToBottom();
+          continue;
+        }
 
         // 工具调用开始：创建 calling 状态的 badge，按 id 去重
         if (payload.tool_call) {
@@ -290,6 +324,12 @@ async function send() {
         }
 
         if (payload.delta) {
+          // 开始输出最终答案时，标记思考过程结束
+          if (thinkEl && !thinkEl.classList.contains("done")) {
+            thinkEl.classList.add("done");
+            thinkEl.querySelector("summary").innerHTML =
+              '<span class="thinking-dot"></span>思考过程<span class="thinking-hint">已完成</span>';
+          }
           answer += payload.delta;
           bubble.textContent = answer;
           scrollToBottom();
@@ -305,13 +345,25 @@ async function send() {
     }
   } finally {
     bubble.classList.remove("cursor-blink");
+    // 结束思考过程展示（无最终答案时兜底标记完成/停止）
+    if (thinkEl && !thinkEl.classList.contains("done")) {
+      thinkEl.classList.add("done");
+      thinkEl.querySelector("summary").innerHTML =
+        '<span class="thinking-dot"></span>思考过程<span class="thinking-hint">' +
+        (stopped ? "已停止" : "已完成") + "</span>";
+    }
     // 没有任何工具调用时移除空 trace 容器，避免占用间距
     if (!traceEl.children.length) traceEl.remove();
     if (stopped) {
       addMeta(bubble, "已停止生成", true);
     } else if (usage) {
       const modelHint = usedModel ? "模型 " + usedModel + " · " : "";
-      addMeta(bubble, modelHint + "本轮 Tokens：输入 " + usage.input_tokens + " · 输出 " + usage.output_tokens + " · 合计 " + usage.total_tokens, false);
+      let modeHint = "";
+      if (usedMode && usedMode !== "fast") {
+        const opt = modeSelect.querySelector('option[value="' + usedMode + '"]');
+        if (opt) modeHint = opt.textContent + " · ";
+      }
+      addMeta(bubble, modeHint + modelHint + "本轮 Tokens：输入 " + usage.input_tokens + " · 输出 " + usage.output_tokens + " · 合计 " + usage.total_tokens, false);
     }
     controller = null;
     setBusy(false);
@@ -685,8 +737,38 @@ modelSelect.addEventListener("change", () => {
   localStorage.setItem(LS_MODEL_KEY, currentModel);
 });
 
+// ===== 模式选择 =====
+async function loadModes() {
+  try {
+    const resp = await fetch("/api/modes");
+    const data = await resp.json();
+    const modes = data.modes || [];
+    // 本地保存的模式若已失效则回退到后端默认模式
+    if (!modes.some((m) => m.id === currentMode)) {
+      currentMode = data.default || (modes[0] && modes[0].id) || "";
+    }
+    modeSelect.innerHTML = "";
+    for (const m of modes) {
+      const opt = document.createElement("option");
+      opt.value = m.id;
+      opt.textContent = m.name;
+      if (m.id === currentMode) opt.selected = true;
+      modeSelect.appendChild(opt);
+    }
+    localStorage.setItem(LS_MODE_KEY, currentMode);
+  } catch (e) {
+    console.error("load modes failed", e);
+  }
+}
+
+modeSelect.addEventListener("change", () => {
+  currentMode = modeSelect.value;
+  localStorage.setItem(LS_MODE_KEY, currentMode);
+});
+
 // ===== 初始化 =====
 (async function init() {
+  await loadModes();
   await loadModels();
   await loadSessions();
   await loadMcpServers();

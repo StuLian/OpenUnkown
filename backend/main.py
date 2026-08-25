@@ -14,7 +14,16 @@ from pydantic import BaseModel
 from backend import store
 from backend.agent import mcp
 from backend.agent.graph import get_graph
-from backend.config import APP_NAME, AVAILABLE_MODELS, DEFAULT_MODEL, is_valid_model
+from backend.config import (
+    APP_NAME,
+    AVAILABLE_MODELS,
+    DEFAULT_MODE,
+    DEFAULT_MODEL,
+    MODES,
+    is_valid_mode,
+    is_valid_model,
+    mode_enables_thinking,
+)
 
 app = FastAPI(title=APP_NAME)
 
@@ -28,6 +37,7 @@ class ChatRequest(BaseModel):
     message: str
     session_id: str
     model: str | None = None
+    mode: str | None = None
 
 
 class McpServerSaveRequest(BaseModel):
@@ -82,22 +92,23 @@ def _msg_to_dict(m) -> dict | None:
     return {"role": role, "content": content}
 
 
-async def _stream_answer(message: str, session_id: str, model: str, request: Request):
-    """以 SSE 方式逐 token 返回所选模型的回答。
+async def _stream_answer(message: str, session_id: str, model: str, mode: str, request: Request):
+    """以 SSE 方式逐 token 返回所选模型/模式的回答。
 
     客户端断开(点击停止)时立即中断底层生成，结束时回传 token 用量。
     首条消息自动创建会话元数据，标题取首条消息。
+    思考模式下额外推送 reasoning_content(thinking 事件)，供前端展示思考过程。
     """
     # 首条消息创建会话(已存在则忽略)，并更新时间
     store.create_session(session_id, message)
     store.touch_session(session_id)
 
     graph = await get_graph()
-    config = {"configurable": {"thread_id": session_id, "model": model}}
+    config = {"configurable": {"thread_id": session_id, "model": model, "mode": mode}}
     inputs = {"messages": [HumanMessage(content=message)]}
     usage: dict | None = None
 
-    yield _sse({"model": model})
+    yield _sse({"model": model, "mode": mode})
 
     try:
         async for chunk, meta in graph.astream(
@@ -143,6 +154,15 @@ async def _stream_answer(message: str, session_id: str, model: str, request: Req
             # 累积 token 用量(通常在最后一个 chunk 上)
             if getattr(chunk, "usage_metadata", None):
                 usage = chunk.usage_metadata
+            # 仅思考模式推送推理过程(reasoning_content)；快速模式保持直接回答，不展示思考
+            if mode_enables_thinking(mode):
+                reasoning = (
+                    chunk.additional_kwargs.get("reasoning_content")
+                    if getattr(chunk, "additional_kwargs", None)
+                    else None
+                )
+                if isinstance(reasoning, str) and reasoning:
+                    yield _sse({"thinking": reasoning})
             # 工具调用阶段 content 可能是空串或非字符串，只把最终自然语言增量推给前端
             text = chunk.content
             if isinstance(text, str) and text:
@@ -160,8 +180,10 @@ async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
     """流式问答接口。"""
     # 校验模型，非法或缺省时用默认模型（前端选择器只提供合法值，此处兜住异常入参）
     model = req.model if req.model and is_valid_model(req.model) else DEFAULT_MODEL
+    # 校验模式，非法或缺省时用默认模式
+    mode = req.mode if req.mode and is_valid_mode(req.mode) else DEFAULT_MODE
     return StreamingResponse(
-        _stream_answer(req.message, req.session_id, model, request),
+        _stream_answer(req.message, req.session_id, model, mode, request),
         media_type="text/event-stream",
     )
 
@@ -170,6 +192,12 @@ async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
 def list_models() -> dict:
     """返回可选模型列表与默认模型。"""
     return {"models": AVAILABLE_MODELS, "default": DEFAULT_MODEL}
+
+
+@app.get("/api/modes")
+def list_modes() -> dict:
+    """返回可选回答模式列表与默认模式。"""
+    return {"modes": MODES, "default": DEFAULT_MODE}
 
 
 @app.get("/api/sessions")

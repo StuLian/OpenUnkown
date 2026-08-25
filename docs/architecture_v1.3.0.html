@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenUnknown 架构文档 V1.3.0</title>
+  <style>
+    :root {
+      --bg: #0f1117; --panel: #161922; --panel-2: #1d212c; --border: #2a2f3d;
+      --text: #e6e8ee; --muted: #9aa0ac; --accent: #6c8cff; --accent-2: #8a6cff;
+      --green: #5fcf80; --orange: #ffb86c; --pink: #ff8a9a; --red: #ff6c7a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1200px 600px at 80% -10%, #1a1d29 0%, var(--bg) 55%);
+      color: var(--text); line-height: 1.7; min-height: 100vh;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+    header.hero { border-bottom: 1px solid var(--border); padding-bottom: 28px; margin-bottom: 40px; }
+    .badge {
+      display: inline-block; font-size: 12px; font-weight: 600;
+      padding: 4px 12px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; letter-spacing: 0.5px;
+    }
+    h1 { font-size: 34px; margin: 16px 0 8px; font-weight: 700; letter-spacing: 0.5px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    h2 {
+      font-size: 22px; margin: 48px 0 18px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border); font-weight: 600;
+      display: flex; align-items: center; gap: 10px;
+    }
+    h2 .num {
+      font-size: 13px; color: var(--accent); font-weight: 700;
+      width: 28px; height: 28px; border-radius: 8px;
+      background: rgba(108,140,255,0.12); border: 1px solid rgba(108,140,255,0.3);
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    h3 { font-size: 16px; margin: 24px 0 10px; color: var(--text); font-weight: 600; }
+    p { margin: 10px 0; color: #d4d7de; }
+    code {
+      font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      background: var(--panel-2); padding: 2px 6px; border-radius: 5px;
+      font-size: 13px; color: var(--accent); border: 1px solid var(--border);
+    }
+    pre {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px 18px; overflow-x: auto;
+      font-size: 13px; line-height: 1.6;
+    }
+    pre code { background: none; border: none; padding: 0; color: #d4d7de; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    td code { font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+    .stat .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .stat .value { font-size: 18px; font-weight: 600; }
+    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 5px; margin-right: 6px; font-weight: 600; }
+    .tag.blue { background: rgba(108,140,255,0.15); color: var(--accent); border: 1px solid rgba(108,140,255,0.3); }
+    .tag.green { background: rgba(95,207,128,0.15); color: var(--green); border: 1px solid rgba(95,207,128,0.3); }
+    .tag.orange { background: rgba(255,184,108,0.15); color: var(--orange); border: 1px solid rgba(255,184,108,0.3); }
+    .tag.pink { background: rgba(255,138,154,0.15); color: var(--pink); border: 1px solid rgba(255,138,154,0.3); }
+    .tag.purple { background: rgba(138,108,255,0.15); color: var(--accent-2); border: 1px solid rgba(138,108,255,0.3); }
+    .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0; font-size: 13px; }
+    .flow .step { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-weight: 500; }
+    .flow .arrow { color: var(--accent); font-weight: 700; }
+    ul { padding-left: 22px; } ul li { margin: 6px 0; color: #d4d7de; }
+    .meta-row { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .note { border-left: 3px solid var(--orange); background: rgba(255,184,108,0.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .success { border-left: 3px solid var(--green); background: rgba(95,207,128,0.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .todo { border-left: 3px solid var(--orange); background: rgba(255,184,108,0.08); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .todo strong { color: var(--orange); }
+    footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+    .version-tag {
+      position: fixed; top: 16px; right: 20px; z-index: 50;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+      padding: 6px 14px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; box-shadow: 0 4px 16px rgba(108,140,255,0.35);
+    }
+    .mermaid { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin: 16px 0; text-align: center; overflow-x: auto; }
+    .changelog { font-size: 14px; }
+    .changelog li { margin: 8px 0; }
+    .changelog .new { color: var(--green); font-weight: 600; }
+    .changelog .opt { color: var(--orange); font-weight: 600; }
+    .changelog .fix { color: var(--accent); font-weight: 600; }
+    .compare-table td:nth-child(2) { color: var(--pink); }
+    .compare-table td:nth-child(3) { color: var(--green); }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: "dark",
+      themeVariables: {
+        primaryColor: "#1d212c", primaryBorderColor: "#6c8cff",
+        primaryTextColor: "#e6e8ee", lineColor: "#6c8cff",
+        fontFamily: "-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif"
+      }
+    });
+  </script>
+</head>
+<body>
+  <div class="version-tag">V1.3.0</div>
+  <div class="wrap">
+    <header class="hero">
+      <span class="badge">V1.3.0</span>
+      <h1>OpenUnknown 架构文档</h1>
+      <div class="subtitle">浏览器工具接入 · 网页抓取 · 联网搜索 · 工具调用收敛</div>
+      <div class="meta-row">文档版本 1.3.0 &nbsp;|&nbsp; 生成日期 2026-08-24</div>
+    </header>
+
+    <section>
+      <h2><span class="num">0</span>V1.3.0 变更摘要</h2>
+      <p>V1.2.0 解决了 token 开销与工具按需绑定问题，但 Agent 的「对外信息获取」能力仍局限在天气与飞书两个域：既不能抓取用户给出的网页，也不能联网搜索时事资讯。V1.3.0 补齐了<strong>浏览器能力</strong>——新增 <code>browser_fetch</code> / <code>browser_search</code> 两个工具，沿用 V1.2.0 的关键词预筛机制按需触发；同时针对工具反复失败导致的死循环问题，引入<strong>工具调用上限</strong>保证图一定能收敛。</p>
+      <ul class="changelog">
+        <li><span class="new">[新增]</span> <strong>browser_fetch 网页抓取</strong>：抓取指定 URL 并提取可读纯文本（标题/摘要/正文），用标准库 <code>html.parser</code> 抽取，正文上限 4000 字。</li>
+        <li><span class="new">[新增]</span> <strong>browser_search 联网搜索</strong>：DuckDuckGo HTML 为主源、Bing 网页搜索兜底，无需 API Key，自动过滤广告并解码重定向 URL。</li>
+        <li><span class="new">[新增]</span> <strong>浏览意图关键词预筛</strong>：<code>_BROWSE_KWS</code> 关键词组 + <code>want["browse"]</code> 标志，命中「搜索/网页/网址/新闻」等才绑定浏览器工具。</li>
+        <li><span class="fix">[修复]</span> <strong>工具调用上限</strong>：<code>MAX_TOOL_CALLS = 8</code> + <code>_tool_calls_this_turn()</code>，单轮工具调用超限后强制模型直接作答，杜绝 recursion limit 死循环。</li>
+      </ul>
+
+      <h3>量化效果</h3>
+      <div class="grid">
+        <div class="stat"><div class="label">新增内置工具</div><div class="value" style="color:var(--green)">2<span style="font-size:12px;color:var(--muted);margin-left:6px">fetch + search</span></div></div>
+        <div class="stat"><div class="label">新增运行时依赖</div><div class="value" style="color:var(--green)">0<span style="font-size:12px;color:var(--muted);margin-left:6px">纯 httpx + 标准库</span></div></div>
+        <div class="stat"><div class="label">搜索源</div><div class="value" style="color:var(--green)">2<span style="font-size:12px;color:var(--muted);margin-left:6px">DDG + Bing 兜底</span></div></div>
+        <div class="stat"><div class="label">单轮工具上限</div><div class="value" style="color:var(--green)">8<span style="font-size:12px;color:var(--muted);margin-left:6px">超限强制作答</span></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="num">1</span>浏览器工具总览</h2>
+      <p>新增模块 <code>backend/agent/tools/browser_use.py</code>，设计上刻意对齐 <code>weather.py</code> 的轻量范式：只用项目已有的 <code>httpx</code> + Python 标准库，<strong>不引入无头浏览器、不启动额外进程、不需要任何 API Key</strong>。</p>
+      <p>两个工具分别覆盖「给网址 → 读内容」和「给关键词 → 搜结果」两种浏览意图：</p>
+      <table>
+        <thead><tr><th>工具</th><th>输入</th><th>做什么</th><th>典型问法</th></tr></thead>
+        <tbody>
+          <tr><td><code>browser_fetch</code></td><td><code>url</code></td><td>抓取网页 → 提取标题/摘要/正文纯文本</td><td>「打开这个网页」「抓取这个网址的内容」</td></tr>
+          <tr><td><code>browser_search</code></td><td><code>query</code> + <code>max_results</code></td><td>联网搜索 → 返回标题/真实 URL/摘要列表</td><td>「搜索一下」「搜一下 XX 最新消息」</td></tr>
+        </tbody>
+      </table>
+      <div class="success">设计原则延续 V1.2.0：<strong>工具能力写进 FC schema（docstring），不在 prompt 里重复</strong>。两个工具的描述字段直接引导模型在「搜」和「抓」之间选择。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">2</span>browser_fetch：网页正文提取</h2>
+      <p><code>browser_fetch(url)</code> 的职责是把任意 HTML 网页压缩成模型可读的纯文本，核心是 <code>_TextExtractor(HTMLParser)</code>——继承标准库 <code>html.parser.HTMLParser</code>，不引入 BeautifulSoup / readability 等第三方解析库。</p>
+
+      <h3>2.1 提取策略</h3>
+      <pre><code>class _TextExtractor(HTMLParser):
+    _SKIP_TAGS  = {"script","style","noscript","template","svg","iframe"}   # 不可见内容直接丢弃
+    _BLOCK_TAGS = {"p","div","li","h1"..."section","article","table",...}   # 块级标签换行
+
+    # 记录三类信息：
+    #   title       <title> 标签文本
+    #   description <meta name="description" content="...">
+    #   body        块级标签分段后的正文文本</code></pre>
+      <p>拼装输出顺序为 <code>标题 → 摘要 → 正文</code>，正文若超过 <code>_MAX_TEXT=4000</code> 字则截断并标注，避免长页面撑爆上下文。</p>
+
+      <h3>2.2 关键实现点</h3>
+      <ul>
+        <li><strong>URL 归一化</strong>：<code>_normalize_url()</code> 自动给缺协议的 <code>example.com</code> 补 <code>https://</code>，用户随手丢域名也能抓。</li>
+        <li><strong>伪装浏览器</strong>：统一 <code>User-Agent</code> + <code>Accept-Language: zh-CN</code>，降低站点反爬拦截概率。</li>
+        <li><strong>容错返回</strong>：抓取异常或正文为空时返回明确的字符串错误（如「未提取到正文，可能是 JS 动态渲染或反爬页面」），不抛异常打断工具节点。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">3</span>browser_search：联网搜索（多源兜底）</h2>
+      <p><code>browser_search(query, max_results=5)</code> 提供无 Key 的联网检索。第一版只接了 DuckDuckGo HTML 端点，实测连续请求几次后会被返回 202 挑战页（限流），导致工具空手而归、模型反复重试。因此 V1.3.0 设计成<strong>双源兜底</strong>结构。</p>
+
+      <h3>3.1 搜索链路</h3>
+      <pre class="mermaid">
+graph LR
+    Q["browser_search(query, max_results)"] --> DDG["_ddg_search<br/>DuckDuckGo HTML"]
+    DDG --"有结果"--> FMT["格式化 title/url/snippet"]
+    DDG --"空结果/异常"--> BING["_bing_search<br/>Bing 网页搜索兜底"]
+    BING --> FMT
+    FMT --> OUT["返回结果列表"]
+      </pre>
+      <p><code>_web_search()</code> 封装了这个回退逻辑：先试 DuckDuckGo，空结果或抛异常就切 Bing，二者都失败才返回「搜索引擎暂时不可用」。</p>
+
+      <h3>3.2 结果清洗</h3>
+      <ul>
+        <li><strong>广告过滤</strong>：DuckDuckGo 结果里的广告位是 <code>duckduckgo.com/y.js</code> 或 bing <code>aclick</code> 重定向，<code>_is_ad_href()</code> 识别后整条跳过。</li>
+        <li><strong>URL 解码</strong>：DDG 的 <code>//duckduckgo.com/l/?uddg=&lt;编码&gt;</code> 与 Bing 的 <code>/ck/a?...&amp;u=a1&lt;base64&gt;</code> 都是重定向壳，分别用 <code>unquote</code> 和 <code>base64.urlsafe_b64decode</code> 还原真实目标 URL。</li>
+        <li><strong>条数钳制</strong>：<code>max_results</code> 限制在 1–10 之间，防止模型要 100 条拖垮返回。</li>
+      </ul>
+      <div class="note">两个解析器（<code>_DDGResultParser</code> / <code>_bing_search</code> 的块分割）都用标准库 <code>HTMLParser</code> / <code>re</code> 实现，无新增第三方依赖。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">4</span>触发机制：浏览意图关键词预筛</h2>
+      <p>延续 V1.2.0 的 <code>_select_tools</code> 预筛思路，新增一组 <code>_BROWSE_KWS</code> 关键词，命中才绑定浏览器工具，闲聊时不增加任何 schema 底噪。</p>
+
+      <h3>4.1 关键词分组</h3>
+      <table>
+        <thead><tr><th>分组</th><th>关键词示例</th><th>命中后绑定的工具</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag blue">weather</span></td><td>天气、气温、下雨、多少度...</td><td><code>get_weather</code></td></tr>
+          <tr><td><span class="tag green">map</span></td><td>路线、导航、附近、高德...</td><td>全部 <code>maps_*</code> 工具</td></tr>
+          <tr><td><span class="tag purple">feishu</span></td><td>飞书、文档、日历、待办...</td><td><code>lark_cli</code></td></tr>
+          <tr><td><span class="tag pink">browse</span></td><td>网页、网址、链接、搜索、搜一下、新闻、资讯、抓取、http、search...</td><td><code>browser_fetch</code> + <code>browser_search</code></td></tr>
+        </tbody>
+      </table>
+      <p><code>_select_tools</code> 中新增分支：<code>name in ("browser_fetch", "browser_search")</code> 且 <code>want["browse"]</code> 为真时绑定这两个工具。</p>
+
+      <h3>4.2 两层触发：绑定 ≠ 调用</h3>
+      <p>关键词命中只是<strong>第一层（绑定）</strong>，把工具 schema 交给模型；<strong>第二层（调用）</strong>由模型根据 docstring 决定到底调 <code>browser_search</code>（想搜）还是 <code>browser_fetch</code>（给了网址）。</p>
+      <div class="flow">
+        <span class="step">用户消息 → 小写化</span>
+        <span class="arrow">→</span>
+        <span class="step">_hit(text, _BROWSE_KWS)</span>
+        <span class="arrow">命中 →</span>
+        <span class="step">绑定 fetch + search</span>
+        <span class="arrow">→</span>
+        <span class="step">模型按 docstring 决定调哪个</span>
+      </div>
+      <div class="note">子串匹配且大小写不敏感：<code>search latest AI news</code> 与 <code>帮我搜索新闻</code> 同样命中；想让浏览器工具必触发，话里带上「搜索 / 打开网页 / 抓取」等动词即可。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">5</span>工具调用收敛保障</h2>
+      <p>浏览器工具上线后暴露了一个健壮性问题：当 <code>browser_search</code> 被限流返回空结果时，模型会不断换着法重试（搜索 → 抓取 → 再搜索…），<code>chat → tools → chat → …</code> 循环超过 LangGraph 默认 <code>recursion_limit=25</code>，直接抛错中断。</p>
+
+      <h3>5.1 根因</h3>
+      <p>原图只有 <code>tools_condition</code> 一个终止条件：模型不再产生 tool_calls 才结束。工具一旦「永远给不出满意结果」，模型就可能「永远继续调工具」，图没有兜底出口。</p>
+
+      <h3>5.2 方案：按轮计数 + 强制作答</h3>
+      <pre><code>MAX_TOOL_CALLS = 8
+
+def _tool_calls_this_turn(messages):
+    # 只统计最近一条 human 消息之后的 tool 消息数，天然按轮重置
+    count = 0
+    for msg in reversed(messages):
+        if msg.type == "human": break
+        if msg.type == "tool": count += 1
+    return count</code></pre>
+      <p><code>_chat_node</code> 每次进入时用 <code>_tool_calls_this_turn()</code> 判断：达到上限则<strong>不绑任何工具</strong>，并追加一条「必须停止调用工具、直接回答」的 SystemMessage，保证下一跳必然收敛。</p>
+
+      <h3>5.3 执行流</h3>
+      <pre class="mermaid">
+graph TD
+    CHAT["_chat_node"] --> COUNT{"_tool_calls_this_turn()<br/>&gt;= MAX_TOOL_CALLS ?"}
+    COUNT --"否"--> BIND["正常关键词预筛 + bind_tools"]
+    COUNT --"是"--> FORCE["不绑工具 + 追加强制作答指令"]
+    BIND --> LLM["LLM 生成 tool_calls 或最终答案"]
+    FORCE --> LLM
+    LLM --"有 tool_calls"--> TOOLS["_tools_node 执行"]
+    TOOLS --> CHAT
+    LLM --"无 tool_calls"--> END["END"]
+      </pre>
+
+      <div class="success"><strong>关键点</strong>：计数器从「最近一条 human 消息」重新算起，因此上限是<strong>单轮</strong>的，不会跨多轮对话累积导致后面的轮次工具被误禁用。8 次工具调用对应约 18 步，远低于 recursion_limit=25。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">6</span>目录结构变更</h2>
+      <p>V1.3.0 新增 <code>tools/browser_use.py</code>，其余文件位置不变。</p>
+      <pre><code>backend/agent/
+├── prompts.py        # 提示词模板（不变）
+├── graph.py          # 【改】新增 _BROWSE_KWS / want["browse"] / MAX_TOOL_CALLS / _tool_calls_this_turn
+├── llm.py            # ChatOpenAI 封装
+├── tools/
+│   ├── __init__.py   # 【改】注册 browser_fetch / browser_search
+│   ├── weather.py
+│   ├── browser_use.py # 【新增】_TextExtractor / browser_fetch / browser_search / DDG+Bing 双源搜索
+│   └── lark_cli.py
+└── mcp/
+    ├── __init__.py
+    ├── client.py
+    ├── converter.py
+    └── manager.py
+</code></pre>
+    </section>
+
+    <section>
+      <h2><span class="num">7</span>关键设计决策</h2>
+      <ul>
+        <li><strong>不引入 browser-use 库 / Playwright</strong>：先用 httpx + 标准库覆盖「抓网页 + 搜索」两个高频场景，零依赖、零安装成本、立即可用；无头浏览器自动化留作后续升级点，接口上预留同模块扩展空间。</li>
+        <li><strong>双源搜索兜底而非单源重试</strong>：DuckDuckGo 限流是常态，单纯重试治标不治本；切到结构不同的 Bing 源才能真正拿到结果。</li>
+        <li><strong>广告过滤 + URL 解码做在解析层</strong>：搜索结果直接返回真实 URL，避免模型拿着 <code>duckduckgo.com/l/?uddg=...</code> 这种重定向壳去做无用功。</li>
+        <li><strong>收敛保障走「消息计数」而非独立 state 字段</strong>：从消息历史推导本轮工具次数，天然按轮重置、无需额外持久化 channel，也不会因 checkpoint 跨轮累积而出 bug。</li>
+        <li><strong>触发沿用关键词预筛而非单独判断模型</strong>：与 V1.2.0 保持一致，零额外模型调用、零延迟，浏览场景关键词覆盖率足够。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">8</span>待优化清单</h2>
+      <div class="todo">
+        <strong>问题 1：正文提取对 JS 渲染页面失效</strong><br/>
+        <code>_TextExtractor</code> 只能处理服务端直出的 HTML，SPA / 大量 JS 动态渲染的页面抓不到正文，只能返回「未提取到正文」。<br/>
+        优化方向：引入真实无头浏览器（Playwright）作为 <code>browser_fetch</code> 的升级路径，或接入 <code>browser-use</code> 库支持点击/输入/导航。
+      </div>
+      <div class="todo">
+        <strong>问题 2：搜索源仍可能同时限流</strong><br/>
+        DDG 与 Bing 都是免费 HTML 端点，无 SLA 保证，极端情况下可能同时被限流。<br/>
+        优化方向：增加可配置的搜索 API（如 SerpAPI / Tavily）作为高可用兜底，或对限流响应做退避重试。
+      </div>
+      <div class="todo">
+        <strong>问题 3：抓取无大小/超时精细控制</strong><br/>
+        <code>browser_fetch</code> 会下载完整响应体再截断，超大页面（几十 MB）可能拖慢工具执行。<br/>
+        优化方向：按 <code>Content-Length</code> / 流式读取提前截断，仅解析前 N KB。
+      </div>
+    </section>
+
+    <footer>
+      OpenUnknown 架构文档 · V1.3.0 · 2026-08-24 · 浏览器工具接入 · 网页抓取 · 联网搜索 · 工具调用收敛
+    </footer>
+  </div>
+</body>
+</html>

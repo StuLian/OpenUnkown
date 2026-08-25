@@ -28,15 +28,38 @@ DEFAULT_MODEL = "qwen3.7-plus"
 # 兼容旧引用：默认模型名称
 MODEL_NAME = DEFAULT_MODEL
 
+# 回答模式：快速模式直接作答，思考模式开启深度思考并在界面展示推理过程
+MODES = [
+    {"id": "fast", "name": "快速模式", "description": "直接回答，低延迟", "enable_thinking": False},
+    {"id": "thinking", "name": "思考模式", "description": "深度思考后再回答", "enable_thinking": True},
+]
+
+# 默认模式
+DEFAULT_MODE = "fast"
+
 # 应用名称
 APP_NAME = "OpenUnknown"
 
 _MODEL_IDS = {m["id"] for m in AVAILABLE_MODELS}
+_MODE_IDS = {m["id"] for m in MODES}
 
 
 def is_valid_model(model_id: str) -> bool:
     """校验模型 id 是否在可选列表内。"""
     return model_id in _MODEL_IDS
+
+
+def is_valid_mode(mode_id: str) -> bool:
+    """校验模式 id 是否在可选列表内。"""
+    return mode_id in _MODE_IDS
+
+
+def mode_enables_thinking(mode_id: str) -> bool:
+    """判断指定模式是否需要开启深度思考。"""
+    for m in MODES:
+        if m["id"] == mode_id:
+            return bool(m.get("enable_thinking"))
+    return False
 
 
 @lru_cache(maxsize=1)
