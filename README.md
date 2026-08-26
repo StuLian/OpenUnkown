@@ -2,6 +2,11 @@
 
 基于 FastAPI + LangGraph 的多模型问答应用。
 
+- 需要**登录**（本地账号密码 + 开放注册，JWT 会话）。
+- 登录后在「模型设置」里填写**模型服务 ApiKey**（默认**百炼 / DashScope**），
+  未配置 ApiKey 的用户**无法使用对话功能**（无任何兜底）。
+- ApiKey **加密存储**（Fernet 信封加密），明文不落库、不回显。
+
 ## 接入 LangSmith 追踪
 
 本项目基于 LangGraph，接入 LangSmith **无需任何埋点代码**——只要配置好环境变量，
@@ -62,4 +67,30 @@ uvicorn backend.main:app --reload
 | `LANGSMITH_TRACING` | 是 | 设为 `true` 开启自动追踪 |
 | `LANGSMITH_PROJECT` | 否 | 项目名，默认 `OpenUnknown` |
 | `LANGSMITH_ENDPOINT` | 否 | 自托管地址，SaaS 不需要 |
-| `DASHSCOPE_API_KEY` | 否 | 模型服务 Key（默认读 `~/.dashscope/api_key`） |
+
+> 说明：模型服务 ApiKey **不再通过环境变量或本地文件兜底**，而是登录后按用户在界面填写。
+
+## 登录与 ApiKey 配置
+
+### 1. 登录 / 注册
+
+打开应用后先注册或登录（本地账号密码）。登录后签发 JWT 会话令牌，前端保存在
+`localStorage`，后续请求通过 `Authorization: Bearer <token>` 携带。
+
+### 2. 填写模型服务 ApiKey（默认百炼）
+
+登录后点击左下角「模型设置」：
+
+1. 选择平台（当前仅「百炼 / 阿里云 DashScope」，数据结构已为多平台预留）；
+2. 填入 ApiKey（形如 `sk-...`），可先「测试连接」验证；
+3. 保存后**立即生效**，无需重启。
+
+### 3. 加密存储与无兜底
+
+- ApiKey 用 **Fernet** 对称加密后存入 `data/openunknown.db` 的 `user_api_keys` 表，
+  明文不落库、不回显；解密所需的 DEK 用服务端主密钥包裹后存入 `users.dek_ciphertext`
+  （信封加密），服务重启后可恢复，**无需重新登录**；
+- 未配置 ApiKey 的用户在界面上会被拦截、无法发送消息；后端也会在 `/api/chat`
+  直接返回错误事件，**不做任何环境变量 / 本地文件兜底**（开发阶段同样必须填写）。
+
+> 平台扩展：在 `backend/config.py` 的 `PLATFORMS` 里新增条目即可接入其他平台。

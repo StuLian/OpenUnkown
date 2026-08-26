@@ -2,18 +2,31 @@
 from __future__ import annotations
 
 import os
-from functools import lru_cache
 from pathlib import Path
 
-from dashscope.common.api_key import get_default_api_key
 from dotenv import load_dotenv
 
 # 尽早加载项目根目录的 .env（backend/ 的上一级），
 # 使 LangSmith 等环境变量配置无需手动 export 即可生效。
+# 注意：必须放在任何会读取环境变量的第三方库 import 之前（例如 dashscope 在 import
+# 时会固化 api_key），否则 .env 中的配置无法被这些库感知。
 load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
 
-# DashScope 的 OpenAI 兼容接入地址，配合 langchain-openai 使用
+# 支持的模型服务平台。默认走百炼（阿里云 DashScope），日后可在此扩展其他平台。
+# 每个平台给出 OpenAI 兼容接入地址、连通性测试用的轻量模型。
+PLATFORMS = [
+    {
+        "id": "bailian",
+        "name": "百炼（阿里云 DashScope）",
+        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "test_model": "qwen-turbo",
+    },
+]
+
+DEFAULT_PLATFORM = "bailian"
+
+# 兼容旧引用：默认平台（百炼）的 OpenAI 兼容接入地址
 DASHSCOPE_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 # 可选模型列表（DashScope 通义千问系列），前端选择器与后端校验共用
@@ -75,12 +88,14 @@ def mode_enables_thinking(mode_id: str) -> bool:
     return False
 
 
-@lru_cache(maxsize=1)
-def get_api_key() -> str:
-    """获取 DashScope ApiKey，按用户要求通过 get_default_api_key 读取。"""
-    api_key = get_default_api_key()
-    if not api_key:
-        raise RuntimeError(
-            "未获取到 DashScope ApiKey，请先配置 ~/.dashscope/api_key 或环境变量 DASHSCOPE_API_KEY"
-        )
-    return api_key
+def get_platform(platform_id: str) -> dict:
+    """按 id 返回平台配置，未知平台抛出 ValueError。"""
+    for p in PLATFORMS:
+        if p["id"] == platform_id:
+            return p
+    raise ValueError(f"未知的模型服务平台: {platform_id}")
+
+
+def is_valid_platform(platform_id: str) -> bool:
+    """校验平台 id 是否受支持。"""
+    return any(p["id"] == platform_id for p in PLATFORMS)

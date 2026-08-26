@@ -7,30 +7,31 @@ from __future__ import annotations
 
 from dashscope import TextReRank
 
-from backend.config import get_api_key
-
 RERANK_MODEL = "gte-rerank-v2"
 
 
-def rerank(query: str, documents: list[str], top_n: int | None = None) -> list[tuple[int, float]]:
+def rerank(query: str, documents: list[str], top_n: int | None = None, api_key: str = "") -> list[tuple[int, float]]:
     """按相关度重排文档。
 
     Args:
         query: 查询文本。
         documents: 候选文档列表（保持原顺序）。
         top_n: 返回前几名；None 表示返回全部。
+        api_key: 当前用户的模型服务 ApiKey（必填，不做任何兜底）。
 
     Returns:
         [(原始下标, 相关度分)] 按相关度降序排列。
     """
     if not documents:
         return []
+    if not api_key:
+        raise RuntimeError("未提供模型服务 ApiKey")
     resp = TextReRank.call(
         model=RERANK_MODEL,
         query=query,
         documents=documents,
         top_n=min(top_n or len(documents), len(documents)),
-        api_key=get_api_key(),
+        api_key=api_key,
     )
     if resp.status_code != 200:
         raise RuntimeError(

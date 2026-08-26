@@ -36,3 +36,31 @@ class McpImportRequest(BaseModel):
     """MCP JSON 批量导入请求体。"""
 
     config: dict
+
+
+class ApiKeyUpdateRequest(BaseModel):
+    """模型服务 ApiKey 保存请求体。"""
+
+    api_key: str
+    platform: str = "bailian"
+
+
+class ApiKeyTestRequest(BaseModel):
+    """模型服务 ApiKey 连通性测试请求体。"""
+
+    api_key: str
+    platform: str = "bailian"
+
+
+class RegisterRequest(BaseModel):
+    """注册请求体。"""
+
+    username: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    """登录请求体。"""
+
+    username: str
+    password: str

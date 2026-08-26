@@ -138,13 +138,13 @@ async def _load_server_meta(server: dict) -> list[dict]:
     return metas
 
 
-async def get_enabled_mcp_tools() -> list[BaseTool]:
-    """获取当前所有启用的 MCP Server 提供的工具，并封装为 LangChain BaseTool。
+async def get_enabled_mcp_tools(user_id: str) -> list[BaseTool]:
+    """获取指定用户启用的 MCP Server 提供的工具，并封装为 LangChain BaseTool。
 
     工具列表按 Server 连接配置缓存；真正执行工具时才会再连一次 MCP。
     """
-    servers = store.list_mcp_servers(enabled_only=True)
-    all_ids = {s["id"] for s in store.list_mcp_servers(enabled_only=False)}
+    servers = store.list_mcp_servers(user_id, enabled_only=True)
+    all_ids = {s["id"] for s in store.list_mcp_servers(user_id, enabled_only=False)}
     if not servers:
         _prune_stale_cache(all_ids)
         return []

@@ -15,10 +15,19 @@
     <div class="new-btn" id="newBtn">+ 新建对话</div>
     <div class="session-list" id="sessionList"></div>
     <div class="sidebar-footer">
+      <div class="user-row">
+        <span class="user-name" id="userName">未登录</span>
+        <button class="btn-icon" id="logoutBtn" title="退出登录">退出</button>
+      </div>
       <button class="mcp-entry-btn" id="openMcpModalBtn">
         <span class="mcp-icon">⚙</span>
         <span>MCP 扩展管理</span>
         <span class="mcp-count-badge" id="mcpCountBadge">0</span>
+      </button>
+      <button class="mcp-entry-btn" id="openSettingsBtn">
+        <span class="mcp-icon">⛭</span>
+        <span>模型设置</span>
+        <span class="settings-status-dot" id="settingsStatusDot" title="未配置"></span>
       </button>
     </div>
   </aside>
@@ -46,6 +55,11 @@
           <div>有什么想问的，尽管开始吧。支持天气查询与自定义 MCP 工具。</div>
         </div>
       </div>
+    </div>
+
+    <div class="gate-banner" id="gateBanner" style="display: none;">
+      <span>⚠ 尚未配置模型 ApiKey，无法使用对话功能。</span>
+      <button class="btn btn-primary" id="gateOpenSettingsBtn">去配置</button>
     </div>
 
     <footer>
@@ -150,6 +164,79 @@
           <div class="test-result-box" id="importResultBox" style="display: none;"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- 设置弹窗 -->
+  <div class="modal-backdrop" id="settingsModal" style="display: none;">
+    <div class="modal-dialog modal-dialog-sm">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h3>模型服务设置</h3>
+          <span class="modal-subtitle">配置大模型 ApiKey，保存后立即生效</span>
+        </div>
+        <button class="modal-close" id="closeSettingsModalBtn">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="settings-form">
+          <div class="form-row">
+            <label>模型平台</label>
+            <select id="platformSelect"></select>
+          </div>
+
+          <div class="form-row">
+            <label>ApiKey</label>
+            <div class="key-input-wrap">
+              <input type="password" id="apiKeyInput" placeholder="sk-..." autocomplete="off" spellcheck="false" />
+              <button type="button" class="btn-icon" id="toggleApiKeyBtn">显示</button>
+            </div>
+            <div class="field-hint" id="apiKeyStatus"></div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="testApiKeyBtn">测试连接</button>
+            <button type="button" class="btn btn-primary" id="saveApiKeyBtn">保存</button>
+          </div>
+
+          <div class="settings-reset" id="settingsResetRow" style="display:none;">
+            <button type="button" class="btn btn-secondary" id="clearApiKeyBtn">清除 ApiKey</button>
+          </div>
+
+          <div class="test-result-box" id="apiKeyResultBox" style="display:none;"></div>
+
+          <div class="settings-note">
+            ApiKey 仅加密存储在本地数据库（用你的登录密码派生密钥加密），明文不回显。
+            未配置 ApiKey 时无法使用对话功能，请务必填写真实可用的 Key。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 登录 / 注册遮罩 -->
+  <div class="auth-overlay" id="authOverlay">
+    <div class="auth-card">
+      <div class="auth-logo">O</div>
+      <h2>OpenUnknown</h2>
+      <div class="auth-sub">登录后配置模型 ApiKey，即刻开始对话</div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="authLoginTab">登录</button>
+        <button class="auth-tab" id="authRegisterTab">注册</button>
+      </div>
+      <form id="authForm">
+        <div class="form-row">
+          <label>用户名</label>
+          <input type="text" id="authUsername" autocomplete="username" placeholder="3-32 个字符" required />
+        </div>
+        <div class="form-row">
+          <label>密码</label>
+          <input type="password" id="authPassword" autocomplete="current-password" placeholder="至少 6 位" required />
+        </div>
+        <div class="auth-error" id="authError" style="display: none;"></div>
+        <button type="submit" class="btn btn-primary auth-submit" id="authSubmitBtn">登录</button>
+      </form>
+      <div class="auth-note">ApiKey 将加密存储于本地数据库，仅用于调用模型服务。</div>
     </div>
   </div>
 

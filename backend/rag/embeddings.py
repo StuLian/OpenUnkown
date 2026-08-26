@@ -7,22 +7,22 @@ from __future__ import annotations
 
 from dashscope import TextEmbedding
 
-from backend.config import get_api_key
-
 EMBED_MODEL = "text-embedding-v3"
 EMBED_DIM = 1024
 # text-embedding-v3 单次批量上限（实测不超过 10），超过则分批
 BATCH_SIZE = 10
 
 
-def embed_texts(texts: list[str], text_type: str = "document") -> list[list[float]]:
+def embed_texts(texts: list[str], text_type: str = "document", api_key: str = "") -> list[list[float]]:
     """把一批文本向量化为 1024 维浮点向量，保持输入顺序。
 
     Args:
         texts: 待向量化的文本列表。
         text_type: "document"（入库）或 "query"（检索）。
+        api_key: 当前用户的模型服务 ApiKey（必填，不做任何兜底）。
     """
-    api_key = get_api_key()
+    if not api_key:
+        raise RuntimeError("未提供模型服务 ApiKey")
     vectors: list[list[float]] = []
     for i in range(0, len(texts), BATCH_SIZE):
         batch = texts[i : i + BATCH_SIZE]

@@ -20,7 +20,14 @@ from backend.agent.mcp import get_enabled_mcp_tools
 from backend.agent.prompts import IDENTITY_PROMPT, LARK_SECTION, SYSTEM_PROMPT
 from backend.agent.tools import TOOLS as BUILTIN_TOOLS
 from backend.agent.tools.lark_cli import load_skill_descriptions
-from backend.config import APP_NAME, DEFAULT_MODE, DEFAULT_MODEL, mode_enables_thinking
+from backend.config import (
+    APP_NAME,
+    DEFAULT_MODE,
+    DEFAULT_MODEL,
+    DEFAULT_PLATFORM,
+    get_platform,
+    mode_enables_thinking,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -211,9 +218,9 @@ def _log_llm_input(model_name: str, messages: list, tool_names: list[str]) -> No
     print(text, flush=True)
 
 
-async def _get_all_tools():
-    """获取所有生效的工具列表（内置工具 + 当前启用的 MCP 工具）。"""
-    mcp_tools = await get_enabled_mcp_tools()
+async def _get_all_tools(user_id: str):
+    """获取指定用户所有生效的工具列表（内置工具 + 其启用的 MCP 工具）。"""
+    mcp_tools = await get_enabled_mcp_tools(user_id)
     return [*BUILTIN_TOOLS, *mcp_tools]
 
 
@@ -223,8 +230,12 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
     模型由上层通过 config.configurable.model 指定，使用异步调用便于客户端断开时中断请求。
     本轮工具调用次数达到上限后不再绑定工具，强制模型直接作答，保证图一定能收敛。
     """
-    model_name = (config.get("configurable") or {}).get("model") or DEFAULT_MODEL
-    mode = (config.get("configurable") or {}).get("mode") or DEFAULT_MODE
+    cfg = config.get("configurable") or {}
+    model_name = cfg.get("model") or DEFAULT_MODEL
+    mode = cfg.get("mode") or DEFAULT_MODE
+    platform = cfg.get("platform") or DEFAULT_PLATFORM
+    api_key = cfg.get("api_key") or ""
+    user_id = cfg.get("user_id") or ""
     enable_thinking = mode_enables_thinking(mode)
     force_answer = _tool_calls_this_turn(state["messages"]) >= MAX_TOOL_CALLS
 
@@ -237,10 +248,15 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
         "browse": _hit(user_text, _BROWSE_KWS),
         "hotel": _hit(user_text, _HOTEL_KWS),
     }
-    all_tools = await _get_all_tools()
+    all_tools = await _get_all_tools(user_id)
     bound_tools = [] if force_answer else _select_tools(all_tools, user_text, want)
 
-    llm = get_llm(model_name, enable_thinking=enable_thinking)
+    llm = get_llm(
+        model_name,
+        enable_thinking=enable_thinking,
+        api_key=api_key,
+        base_url=get_platform(platform)["base_url"],
+    )
     if bound_tools:
         llm = llm.bind_tools(bound_tools)
     system_prompt = await _get_system_prompt(include_lark=want["feishu"])
@@ -269,13 +285,18 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
     return {"messages": [response]}
 
 
-async def _tools_node(state: MessagesState) -> dict:
-    """动态工具执行节点：根据最新消息中的 tool_calls 找到对应的工具执行并返回 ToolMessage。"""
+async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
+    """动态工具执行节点：根据最新消息中的 tool_calls 找到对应的工具执行并返回 ToolMessage。
+
+    把 RunnableConfig 透传给工具，使需要调用模型服务的工具（如酒店检索）能取到
+    当前用户的 ApiKey 与平台配置。
+    """
     last_msg = state["messages"][-1]
     if not hasattr(last_msg, "tool_calls") or not last_msg.tool_calls:
         return {"messages": []}
 
-    all_tools = await _get_all_tools()
+    user_id = (config.get("configurable") or {}).get("user_id") or ""
+    all_tools = await _get_all_tools(user_id)
     tool_map = {t.name: t for t in all_tools}
 
     results = []
@@ -289,7 +310,7 @@ async def _tools_node(state: MessagesState) -> dict:
             output = f"Error: Tool '{tool_name}' not found or not enabled."
         else:
             try:
-                output = await tool.ainvoke(tool_args)
+                output = await tool.ainvoke(tool_args, config=config)
             except Exception as e:
                 output = f"Error executing tool '{tool_name}': {e}"
 
@@ -299,11 +320,14 @@ async def _tools_node(state: MessagesState) -> dict:
 
 
 class GraphConfig(TypedDict):
-    """图运行时配置：thread_id 由 checkpointer 使用，model/mode 为本轮所选模型与模式。"""
+    """图运行时配置：thread_id 由 checkpointer 使用；其余为本轮参数。"""
 
     thread_id: str
     model: str
     mode: str
+    platform: str
+    api_key: str
+    user_id: str
 
 
 # 异步 checkpointer 单例(需异步 setup，故用模块级缓存而非 lru_cache)

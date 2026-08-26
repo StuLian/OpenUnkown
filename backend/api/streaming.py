@@ -8,7 +8,8 @@ from langchain_core.messages import HumanMessage
 
 from backend import store
 from backend.agent.graph import get_graph
-from backend.config import mode_enables_thinking
+from backend.auth.service import resolve_api_key
+from backend.config import DEFAULT_PLATFORM, mode_enables_thinking
 
 
 def sse_event(payload: dict) -> str:
@@ -32,24 +33,47 @@ def message_to_dict(m) -> dict | None:
     return {"role": role, "content": content}
 
 
-async def stream_answer(message: str, session_id: str, model: str, mode: str, request: Request):
+async def stream_answer(message: str, session_id: str, model: str, mode: str, user_id: str, request: Request):
     """以 SSE 方式逐 token 返回所选模型/模式的回答。
 
     客户端断开(点击停止)时立即中断底层生成，结束时回传 token 用量。
     首条消息自动创建会话元数据，标题取首条消息。
     思考模式下额外推送 reasoning_content(thinking 事件)，供前端展示思考过程。
+
+    当前用户未配置 ApiKey 时直接返回错误事件，不调用任何模型（无兜底）。
     """
-    # 首条消息创建会话(已存在则忽略)，并更新时间
-    store.create_session(session_id, message)
-    store.touch_session(session_id)
+    # 首条消息创建会话(已存在则忽略)，并更新时间（按用户隔离）
+    store.create_session(user_id, session_id, message)
+    store.touch_session(user_id, session_id)
+
+    # 解析当前用户的 ApiKey；未配置则阻断，不做任何兜底
+    api_key = resolve_api_key(user_id, DEFAULT_PLATFORM)
+    if not api_key:
+        yield sse_event({"error": "尚未配置模型 ApiKey，请先在「模型设置」中填写"})
+        yield "data: [DONE]\n\n"
+        return
+
+    # 解析用户名，便于在 LangSmith 中按用户名（而非仅 user_id）检索
+    user = store.get_user_by_id(user_id)
+    username = user["username"] if user else user_id
 
     graph = await get_graph()
     config = {
-        "configurable": {"thread_id": session_id, "model": model, "mode": mode},
-        # LangSmith 元信息：tags 便于过滤，metadata 便于在控制台检索本次会话/模型/模式
-        "tags": ["openunknown", f"model:{model}", f"mode:{mode}"],
+        "configurable": {
+            "thread_id": store.thread_id_for(user_id, session_id),
+            "model": model,
+            "mode": mode,
+            "platform": DEFAULT_PLATFORM,
+            "api_key": api_key,
+            "user_id": user_id,
+        },
+        # LangSmith 元信息：tags 便于过滤，metadata 便于在控制台按字段检索。
+        # 同时挂 user_id 与 username，便于按用户过滤/检索。
+        "tags": ["openunknown", f"user:{user_id}", f"model:{model}", f"mode:{mode}"],
         "metadata": {
             "session_id": session_id,
+            "user_id": user_id,
+            "user": username,
             "model": model,
             "mode": mode,
         },

@@ -1,7 +1,9 @@
-// OpenUnknown 前端逻辑：多会话管理 + 流式问答 + MCP 扩展管理 + 模型/模式选择
+// OpenUnknown 前端逻辑：登录/注册 + 多会话管理 + 流式问答 + MCP 扩展 + 模型/模式 + ApiKey 设置
 const LS_KEY = "openunknown:current_session";
+const LS_TOKEN_KEY = "openunknown:token";
 const LS_MODEL_KEY = "openunknown:model";
 const LS_MODE_KEY = "openunknown:mode";
+
 const messagesEl = document.getElementById("messages");
 const inputEl = document.getElementById("input");
 const sendBtn = document.getElementById("send");
@@ -10,6 +12,20 @@ const sessionListEl = document.getElementById("sessionList");
 const newBtn = document.getElementById("newBtn");
 const modelSelect = document.getElementById("modelSelect");
 const modeSelect = document.getElementById("modeSelect");
+
+// 登录 / 注册相关 DOM
+const authOverlay = document.getElementById("authOverlay");
+const authLoginTab = document.getElementById("authLoginTab");
+const authRegisterTab = document.getElementById("authRegisterTab");
+const authForm = document.getElementById("authForm");
+const authUsername = document.getElementById("authUsername");
+const authPassword = document.getElementById("authPassword");
+const authError = document.getElementById("authError");
+const authSubmitBtn = document.getElementById("authSubmitBtn");
+const userName = document.getElementById("userName");
+const logoutBtn = document.getElementById("logoutBtn");
+const gateBanner = document.getElementById("gateBanner");
+const gateOpenSettingsBtn = document.getElementById("gateOpenSettingsBtn");
 
 // MCP 相关 DOM 元素
 const mcpModal = document.getElementById("mcpModal");
@@ -44,6 +60,26 @@ const mcpJsonInput = document.getElementById("mcpJsonInput");
 const doImportBtn = document.getElementById("doImportBtn");
 const importResultBox = document.getElementById("importResultBox");
 
+// 设置（模型服务 ApiKey）相关 DOM 元素
+const settingsModal = document.getElementById("settingsModal");
+const openSettingsBtn = document.getElementById("openSettingsBtn");
+const closeSettingsModalBtn = document.getElementById("closeSettingsModalBtn");
+const settingsStatusDot = document.getElementById("settingsStatusDot");
+const platformSelect = document.getElementById("platformSelect");
+const apiKeyInput = document.getElementById("apiKeyInput");
+const toggleApiKeyBtn = document.getElementById("toggleApiKeyBtn");
+const apiKeyStatus = document.getElementById("apiKeyStatus");
+const testApiKeyBtn = document.getElementById("testApiKeyBtn");
+const saveApiKeyBtn = document.getElementById("saveApiKeyBtn");
+const clearApiKeyBtn = document.getElementById("clearApiKeyBtn");
+const settingsResetRow = document.getElementById("settingsResetRow");
+const apiKeyResultBox = document.getElementById("apiKeyResultBox");
+
+// 状态
+let authToken = localStorage.getItem(LS_TOKEN_KEY) || "";
+let currentUser = null;
+let authMode = "login";
+let defaultPlatform = "bailian";
 let busy = false;
 let controller = null;
 let currentSessionId = localStorage.getItem(LS_KEY) || newSessionId();
@@ -57,6 +93,126 @@ function newSessionId() {
     : Math.random().toString(36).slice(2) + Date.now().toString(36));
 }
 
+// 登录/退出时重置会话 id，避免不同用户复用同一本地会话 id
+function resetSessionId() {
+  currentSessionId = newSessionId();
+  localStorage.setItem(LS_KEY, currentSessionId);
+}
+
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ===== 鉴权封装 =====
+function setToken(t) {
+  authToken = t || "";
+  if (authToken) localStorage.setItem(LS_TOKEN_KEY, authToken);
+  else localStorage.removeItem(LS_TOKEN_KEY);
+}
+
+async function apiFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (authToken) headers["Authorization"] = "Bearer " + authToken;
+  const resp = await fetch(url, { ...options, headers });
+  if (resp.status === 401) {
+    doLogout();
+    throw new Error("登录已过期，请重新登录");
+  }
+  return resp;
+}
+
+function showAuth() { authOverlay.style.display = "flex"; }
+function hideAuth() { authOverlay.style.display = "none"; }
+
+function setAuthMode(mode) {
+  authMode = mode;
+  authLoginTab.classList.toggle("active", mode === "login");
+  authRegisterTab.classList.toggle("active", mode === "register");
+  authSubmitBtn.textContent = mode === "login" ? "登录" : "注册";
+  authError.style.display = "none";
+  authError.textContent = "";
+}
+
+function showAuthError(msg) {
+  authError.textContent = msg;
+  authError.style.display = "block";
+}
+
+function doLogout() {
+  if (authToken) {
+    fetch("/api/auth/logout", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + authToken },
+    }).catch(() => {});
+  }
+  setToken("");
+  currentUser = null;
+  userName.textContent = "未登录";
+  resetSessionId();
+  clearMessages();
+  sessionListEl.innerHTML = "";
+  mcpServerList.innerHTML = "";
+  renderGate();
+  showAuth();
+}
+
+authLoginTab.addEventListener("click", () => setAuthMode("login"));
+authRegisterTab.addEventListener("click", () => setAuthMode("register"));
+
+authForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const username = authUsername.value.trim();
+  const password = authPassword.value;
+  if (!username || !password) {
+    showAuthError("请填写用户名和密码");
+    return;
+  }
+  authSubmitBtn.disabled = true;
+  try {
+    const url = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      showAuthError(data.detail || "操作失败");
+      return;
+    }
+    setToken(data.token);
+    currentUser = data.user;
+    authPassword.value = "";
+    resetSessionId();
+    hideAuth();
+    await bootstrapApp();
+  } catch (err) {
+    showAuthError("请求失败：" + err.message);
+  } finally {
+    authSubmitBtn.disabled = false;
+  }
+});
+
+logoutBtn.addEventListener("click", doLogout);
+
+// ===== 无 ApiKey 拦截 =====
+function renderGate() {
+  const hasKey = !!(currentUser && currentUser.has_api_key);
+  gateBanner.style.display = hasKey ? "none" : "flex";
+  inputEl.disabled = !hasKey;
+  sendBtn.disabled = !hasKey;
+  settingsStatusDot.className = "settings-status-dot" + (hasKey ? " on" : "");
+  settingsStatusDot.title = hasKey ? "已配置 ApiKey" : "未配置 ApiKey";
+}
+
+gateOpenSettingsBtn.addEventListener("click", () => {
+  settingsModal.style.display = "flex";
+  apiKeyResultBox.style.display = "none";
+  loadSettings();
+});
+
+// ===== 基础工具 =====
 function setBusy(state) {
   busy = state;
   sendBtn.textContent = state ? "停止" : "发送";
@@ -109,7 +265,7 @@ function addMeta(bubble, text, stopped) {
 // ===== 会话管理 =====
 async function loadSessions() {
   try {
-    const resp = await fetch("/api/sessions");
+    const resp = await apiFetch("/api/sessions");
     const data = await resp.json();
     renderSessions(data.sessions || []);
   } catch (e) {
@@ -157,7 +313,7 @@ async function selectSession(id) {
     el.classList.toggle("active", el.dataset.id === id);
   });
   try {
-    const resp = await fetch("/api/sessions/" + id + "/messages");
+    const resp = await apiFetch("/api/sessions/" + id + "/messages");
     const data = await resp.json();
     for (const m of (data.messages || [])) {
       if (m.role === "system") continue;
@@ -182,7 +338,7 @@ async function deleteSession(id) {
   if (busy) return;
   if (!confirm("确定删除这个对话吗？")) return;
   try {
-    await fetch("/api/sessions/" + id, { method: "DELETE" });
+    await apiFetch("/api/sessions/" + id, { method: "DELETE" });
     if (id === currentSessionId) {
       currentSessionId = newSessionId();
       localStorage.setItem(LS_KEY, currentSessionId);
@@ -206,7 +362,6 @@ async function send() {
   inputEl.value = "";
   autoGrow();
 
-  // 工具调用透明化：在 bot 气泡上方插入 trace 容器
   const traceEl = document.createElement("div");
   traceEl.className = "tool-trace";
   const e = document.getElementById("empty");
@@ -220,16 +375,14 @@ async function send() {
   let stopped = false;
   let usedModel = modelSelect.value || currentModel;
   let usedMode = modeSelect.value || currentMode;
-  // 思考模式：累积 reasoning_content 并在气泡上方展示可折叠的思考过程
   let thinking = "";
   let thinkEl = null;
-  // 记录每个工具 badge 节点，key 为 tool_call_id（同名工具可能并发多次调用）
   const toolBadges = {};
 
   controller = new AbortController();
 
   try {
-    const resp = await fetch("/api/chat", {
+    const resp = await apiFetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -267,7 +420,6 @@ async function send() {
         if (payload.model) { usedModel = payload.model; continue; }
         if (payload.mode) { usedMode = payload.mode; continue; }
 
-        // 思考过程：累积推理增量，用 <details> 折叠展示在答案上方
         if (payload.thinking) {
           thinking += payload.thinking;
           if (!thinkEl) {
@@ -278,7 +430,6 @@ async function send() {
             body.className = "thinking-body";
             thinkEl.appendChild(summary);
             thinkEl.appendChild(body);
-            // 插到工具 trace 之前，保持“先思考、再调用工具、最后作答”的顺序
             messagesEl.insertBefore(thinkEl, traceEl);
           }
           const summary = thinkEl.querySelector("summary");
@@ -288,11 +439,10 @@ async function send() {
           continue;
         }
 
-        // 工具调用开始：创建 calling 状态的 badge，按 id 去重
         if (payload.tool_call) {
           const callId = payload.tool_call.id;
           const toolName = payload.tool_call.tool;
-          if (toolBadges[callId]) { continue; } // 同一调用重复到达则跳过
+          if (toolBadges[callId]) { continue; }
           const badge = document.createElement("span");
           badge.className = "tool-badge calling";
           badge.innerHTML = `<span class="dot"></span> ${escapeHtml(toolName)} 调用中...`;
@@ -302,7 +452,6 @@ async function send() {
           continue;
         }
 
-        // 工具结果返回：按 id 找到对应 badge 更新为 done
         if (payload.tool_result) {
           const callId = payload.tool_result.id;
           const toolName = payload.tool_result.tool;
@@ -312,7 +461,6 @@ async function send() {
             badge.title = payload.tool_result.output || "";
             badge.innerHTML = `<span class="dot"></span> ${escapeHtml(toolName)} 已返回`;
           } else {
-            // 没有对应的 calling badge 时（工具节点先到），补一个
             const newBadge = document.createElement("span");
             newBadge.className = "tool-badge done";
             newBadge.title = payload.tool_result.output || "";
@@ -324,7 +472,6 @@ async function send() {
         }
 
         if (payload.delta) {
-          // 开始输出最终答案时，标记思考过程结束
           if (thinkEl && !thinkEl.classList.contains("done")) {
             thinkEl.classList.add("done");
             thinkEl.querySelector("summary").innerHTML =
@@ -345,14 +492,12 @@ async function send() {
     }
   } finally {
     bubble.classList.remove("cursor-blink");
-    // 结束思考过程展示（无最终答案时兜底标记完成/停止）
     if (thinkEl && !thinkEl.classList.contains("done")) {
       thinkEl.classList.add("done");
       thinkEl.querySelector("summary").innerHTML =
         '<span class="thinking-dot"></span>思考过程<span class="thinking-hint">' +
         (stopped ? "已停止" : "已完成") + "</span>";
     }
-    // 没有任何工具调用时移除空 trace 容器，避免占用间距
     if (!traceEl.children.length) traceEl.remove();
     if (stopped) {
       addMeta(bubble, "已停止生成", true);
@@ -389,7 +534,6 @@ inputEl.addEventListener("keydown", (e) => {
 });
 
 // ===== MCP 扩展交互逻辑 =====
-
 function switchMcpTab(tabName) {
   tabListBtn.classList.toggle("active", tabName === "list");
   tabFormBtn.classList.toggle("active", tabName === "form");
@@ -478,7 +622,7 @@ function getFormData() {
 
 async function loadMcpServers() {
   try {
-    const resp = await fetch("/api/mcp/servers");
+    const resp = await apiFetch("/api/mcp/servers");
     const data = await resp.json();
     mcpServersCache = data.servers || [];
     renderMcpServers(mcpServersCache);
@@ -525,7 +669,6 @@ function renderMcpServers(servers) {
       <div class="mcp-card-tools" id="toolsPreview_${s.id}"></div>
     `;
 
-    // 绑定事件
     const toggleCb = card.querySelector(".mcp-toggle-cb");
     toggleCb.addEventListener("change", async (e) => {
       await toggleMcp(s.id, e.target.checked);
@@ -544,14 +687,9 @@ function renderMcpServers(servers) {
   }
 }
 
-function escapeHtml(str) {
-  if (!str) return "";
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
 async function toggleMcp(id, enabled) {
   try {
-    await fetch(`/api/mcp/servers/${id}/toggle`, {
+    await apiFetch(`/api/mcp/servers/${id}/toggle`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled }),
@@ -565,7 +703,7 @@ async function toggleMcp(id, enabled) {
 async function deleteMcp(id, name) {
   if (!confirm(`确定删除 MCP 服务「${name}」吗？`)) return;
   try {
-    await fetch(`/api/mcp/servers/${id}`, { method: "DELETE" });
+    await apiFetch(`/api/mcp/servers/${id}`, { method: "DELETE" });
     await loadMcpServers();
   } catch (err) {
     alert("删除失败: " + err.message);
@@ -592,7 +730,7 @@ async function testAndPreviewMcp(s) {
     container.innerHTML = '<span style="color:var(--accent);">连接测试中...</span>';
   }
   try {
-    const resp = await fetch("/api/mcp/test", {
+    const resp = await apiFetch("/api/mcp/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(s),
@@ -626,7 +764,7 @@ testFormBtn.addEventListener("click", async () => {
 
   try {
     const data = getFormData();
-    const resp = await fetch("/api/mcp/test", {
+    const resp = await apiFetch("/api/mcp/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -657,7 +795,7 @@ mcpForm.addEventListener("submit", async (e) => {
   saveFormBtn.disabled = true;
   try {
     const data = getFormData();
-    const resp = await fetch("/api/mcp/servers", {
+    const resp = await apiFetch("/api/mcp/servers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -686,7 +824,7 @@ doImportBtn.addEventListener("click", async () => {
 
   try {
     const parsed = JSON.parse(text);
-    const resp = await fetch("/api/mcp/import", {
+    const resp = await apiFetch("/api/mcp/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ config: parsed }),
@@ -708,13 +846,149 @@ doImportBtn.addEventListener("click", async () => {
   }
 });
 
+// ===== 模型服务设置（ApiKey） =====
+function showApiKeyResult(message, kind) {
+  apiKeyResultBox.style.display = "block";
+  apiKeyResultBox.className = "test-result-box" + (kind ? " " + kind : "");
+  apiKeyResultBox.textContent = message;
+}
+
+function renderApiKeyStatus(data) {
+  const platforms = data.platforms || [];
+  const def = data.default_platform || "bailian";
+  defaultPlatform = def;
+
+  platformSelect.innerHTML = "";
+  for (const p of platforms) {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.name;
+    if (p.id === def) opt.selected = true;
+    platformSelect.appendChild(opt);
+  }
+
+  const cur = data.current || {};
+  const hasKey = !!cur.has_key;
+  if (currentUser) currentUser.has_api_key = hasKey;
+
+  settingsResetRow.style.display = hasKey ? "block" : "none";
+  apiKeyInput.value = "";
+  apiKeyStatus.textContent = hasKey
+    ? "当前已配置 · " + (cur.key_masked || "")
+    : "尚未配置 ApiKey，请填写并保存";
+  renderGate();
+}
+
+async function loadSettings() {
+  try {
+    const resp = await apiFetch("/api/settings");
+    const data = await resp.json();
+    renderApiKeyStatus(data);
+  } catch (err) {
+    console.error("加载设置失败", err);
+  }
+}
+
+openSettingsBtn.addEventListener("click", () => {
+  settingsModal.style.display = "flex";
+  apiKeyResultBox.style.display = "none";
+  loadSettings();
+});
+
+closeSettingsModalBtn.addEventListener("click", () => {
+  settingsModal.style.display = "none";
+});
+
+settingsModal.addEventListener("click", (e) => {
+  if (e.target === settingsModal) settingsModal.style.display = "none";
+});
+
+toggleApiKeyBtn.addEventListener("click", () => {
+  const isPassword = apiKeyInput.type === "password";
+  apiKeyInput.type = isPassword ? "text" : "password";
+  toggleApiKeyBtn.textContent = isPassword ? "隐藏" : "显示";
+});
+
+testApiKeyBtn.addEventListener("click", async () => {
+  const key = apiKeyInput.value.trim();
+  if (!key) {
+    showApiKeyResult("请输入 ApiKey 后再测试", "error");
+    return;
+  }
+  showApiKeyResult("正在测试连接...", "");
+  testApiKeyBtn.disabled = true;
+  try {
+    const resp = await apiFetch("/api/settings/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: key, platform: platformSelect.value }),
+    });
+    const res = await resp.json();
+    showApiKeyResult(
+      res.ok ? "连接成功，ApiKey 可用" : "连接失败: " + (res.error || "未知错误"),
+      res.ok ? "success" : "error"
+    );
+  } catch (err) {
+    showApiKeyResult("测试失败: " + err.message, "error");
+  } finally {
+    testApiKeyBtn.disabled = false;
+  }
+});
+
+saveApiKeyBtn.addEventListener("click", async () => {
+  const key = apiKeyInput.value.trim();
+  if (!key) {
+    showApiKeyResult("请输入 ApiKey", "error");
+    return;
+  }
+  saveApiKeyBtn.disabled = true;
+  try {
+    const resp = await apiFetch("/api/settings/api-key", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: key, platform: platformSelect.value }),
+    });
+    const res = await resp.json();
+    if (res.ok) {
+      showApiKeyResult("已加密保存并生效", "success");
+      await loadSettings();
+      setTimeout(() => { settingsModal.style.display = "none"; }, 600);
+    } else {
+      showApiKeyResult("保存失败: " + (res.detail || "未知错误"), "error");
+    }
+  } catch (err) {
+    showApiKeyResult("保存失败: " + err.message, "error");
+  } finally {
+    saveApiKeyBtn.disabled = false;
+  }
+});
+
+clearApiKeyBtn.addEventListener("click", async () => {
+  if (!confirm("确定清除已保存的 ApiKey 吗？清除后将无法使用对话功能。")) return;
+  try {
+    const resp = await apiFetch(
+      "/api/settings/api-key?platform=" + encodeURIComponent(platformSelect.value),
+      { method: "DELETE" }
+    );
+    const res = await resp.json();
+    if (res.ok) {
+      apiKeyInput.value = "";
+      showApiKeyResult("已清除 ApiKey", "success");
+      await loadSettings();
+    } else {
+      showApiKeyResult("清除失败", "error");
+    }
+  } catch (err) {
+    showApiKeyResult("清除失败: " + err.message, "error");
+  }
+});
+
 // ===== 模型选择 =====
 async function loadModels() {
   try {
-    const resp = await fetch("/api/models");
+    const resp = await apiFetch("/api/models");
     const data = await resp.json();
     const models = data.models || [];
-    // 本地保存的模型若已失效则回退到后端默认模型
     if (!models.some((m) => m.id === currentModel)) {
       currentModel = data.default || (models[0] && models[0].id) || "";
     }
@@ -740,10 +1014,9 @@ modelSelect.addEventListener("change", () => {
 // ===== 模式选择 =====
 async function loadModes() {
   try {
-    const resp = await fetch("/api/modes");
+    const resp = await apiFetch("/api/modes");
     const data = await resp.json();
     const modes = data.modes || [];
-    // 本地保存的模式若已失效则回退到后端默认模式
     if (!modes.some((m) => m.id === currentMode)) {
       currentMode = data.default || (modes[0] && modes[0].id) || "";
     }
@@ -766,16 +1039,54 @@ modeSelect.addEventListener("change", () => {
   localStorage.setItem(LS_MODE_KEY, currentMode);
 });
 
-// ===== 初始化 =====
+// ===== 应用启动 =====
+async function bootstrapApp() {
+  try {
+    const resp = await apiFetch("/api/auth/me");
+    if (!resp.ok) throw new Error("未登录");
+    currentUser = await resp.json();
+    userName.textContent = currentUser.username;
+    await loadModes();
+    await loadModels();
+    await loadSessions();
+    await loadMcpServers();
+    await loadSettings();
+    renderGate();
+    const exists = document.querySelector('.session-item[data-id="' + currentSessionId + '"]');
+    if (exists) {
+      await selectSession(currentSessionId);
+    } else {
+      inputEl.focus();
+    }
+  } catch (e) {
+    doLogout();
+  }
+}
+
 (async function init() {
-  await loadModes();
-  await loadModels();
-  await loadSessions();
-  await loadMcpServers();
-  const exists = document.querySelector('.session-item[data-id="' + currentSessionId + '"]');
-  if (exists) {
-    await selectSession(currentSessionId);
-  } else {
-    inputEl.focus();
+  if (!authToken) {
+    showAuth();
+    return;
+  }
+  try {
+    const resp = await apiFetch("/api/auth/me");
+    if (!resp.ok) throw new Error("未登录");
+    currentUser = await resp.json();
+    userName.textContent = currentUser.username;
+    hideAuth();
+    await loadModes();
+    await loadModels();
+    await loadSessions();
+    await loadMcpServers();
+    await loadSettings();
+    renderGate();
+    const exists = document.querySelector('.session-item[data-id="' + currentSessionId + '"]');
+    if (exists) {
+      await selectSession(currentSessionId);
+    } else {
+      inputEl.focus();
+    }
+  } catch (e) {
+    showAuth();
   }
 })();

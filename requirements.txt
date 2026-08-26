@@ -13,3 +13,5 @@ numpy>=1.25
 aiosqlite==0.20.0
 pydantic==2.10.4
 mcp>=1.0.0
+cryptography>=42.0.0
+PyJWT>=2.8.0

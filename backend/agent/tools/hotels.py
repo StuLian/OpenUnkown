@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
 from backend.rag import search_hotels as _rag_search_hotels
@@ -33,7 +34,7 @@ def _format_result(results: list[dict]) -> str:
 
 
 @tool
-def search_hotels(query: str, top_k: int = 5) -> str:
+def search_hotels(query: str, top_k: int = 5, config: RunnableConfig = None) -> str:
     """在西雅图酒店数据中检索相关酒店。
 
     当用户询问西雅图的酒店推荐、找酒店、比价、酒店设施（泳池/健身房/餐厅/会议室等）、
@@ -45,5 +46,7 @@ def search_hotels(query: str, top_k: int = 5) -> str:
         top_k: 返回的酒店数量，默认 5，取值范围 1-10。
     """
     top_k = max(1, min(int(top_k), 10))
-    results = _rag_search_hotels(query, top_k=top_k)
+    cfg = (config or {}).get("configurable") or {}
+    api_key = cfg.get("api_key") or ""
+    results = _rag_search_hotels(query, top_k=top_k, api_key=api_key)
     return _format_result(results)

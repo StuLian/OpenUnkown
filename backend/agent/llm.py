@@ -22,7 +22,7 @@ from langchain_openai.chat_models.base import (
     _create_usage_metadata,
 )
 
-from backend.config import DASHSCOPE_BASE_URL, DEFAULT_MODEL, get_api_key
+from backend.config import DASHSCOPE_BASE_URL, DEFAULT_MODEL
 
 
 def _convert_chunk_with_reasoning(
@@ -142,18 +142,28 @@ class ThinkingChatOpenAI(ChatOpenAI):
                 yield generation_chunk
 
 
-@lru_cache(maxsize=16)
-def get_llm(model_name: str = DEFAULT_MODEL, enable_thinking: bool = False) -> ThinkingChatOpenAI:
-    """按模型名 + 思考开关构建聊天模型，走 DashScope 的 OpenAI 兼容协议。
+@lru_cache(maxsize=128)
+def get_llm(
+    model_name: str = DEFAULT_MODEL,
+    enable_thinking: bool = False,
+    api_key: str = "",
+    base_url: str = DASHSCOPE_BASE_URL,
+) -> ThinkingChatOpenAI:
+    """按模型名 + 思考开关 + ApiKey + BaseURL 构建聊天模型。
 
-    按 (model_name, enable_thinking) 缓存，切换模型或模式时复用已构建实例。
+    ApiKey 由上层（当前登录用户）传入，模型调用不再读取任何全局/文件兜底配置。
     """
     return ThinkingChatOpenAI(
         model=model_name,
-        api_key=get_api_key(),
-        base_url=DASHSCOPE_BASE_URL,
+        api_key=api_key,
+        base_url=base_url,
         temperature=0.7,
         streaming=True,
         stream_usage=True,
         extra_body={"enable_thinking": True} if enable_thinking else None,
     )
+
+
+def invalidate_llm_cache() -> None:
+    """清空 LLM 实例缓存，使 ApiKey 等配置变更后重新构建实例。"""
+    get_llm.cache_clear()

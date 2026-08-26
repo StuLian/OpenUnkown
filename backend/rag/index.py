@@ -71,9 +71,9 @@ class HotelIndex:
         # BM25 从文档文本即时重建，无需持久化、无 API 开销
         self.bm25 = BM25([d["text"] for d in docs])
 
-    def _vector_search(self, query: str) -> tuple[dict[int, int], dict[int, float]]:
+    def _vector_search(self, query: str, api_key: str) -> tuple[dict[int, int], dict[int, float]]:
         """向量全文检索：返回 (doc_id->排名, doc_id->余弦分)。"""
-        query_vec = np.array(embed_texts([query], text_type="query")[0], dtype="float32")
+        query_vec = np.array(embed_texts([query], text_type="query", api_key=api_key)[0], dtype="float32")
         query_vec = query_vec.reshape(1, -1)
         faiss.normalize_L2(query_vec)
         scores, ids = self.index.search(query_vec, self.index.ntotal)
@@ -97,7 +97,7 @@ class HotelIndex:
                 ranks[idx] = rank
         return ranks
 
-    def search(self, query: str, top_k: int = 5) -> list[dict]:
+    def search(self, query: str, top_k: int = 5, api_key: str = "") -> list[dict]:
         """混合检索与 query 最相关的酒店。
 
         向量 + BM25 经 RRF 融合召回候选，再用 rerank 重排取 top_k；
@@ -109,7 +109,7 @@ class HotelIndex:
         if not self.docs:
             return []
 
-        vec_ranks, cos_map = self._vector_search(query)
+        vec_ranks, cos_map = self._vector_search(query, api_key)
         bm25_ranks = self._bm25_search(query)
 
         # 位置结构化过滤：查询带位置意图时，只保留对应区域的酒店
@@ -135,7 +135,7 @@ class HotelIndex:
         final: list[tuple[int, float]] | None = None
         try:
             cand_texts = [self.docs[i]["text"] for i in cand_ids]
-            reranked = rerank(query, cand_texts, top_n=min(top_k, len(cand_ids)))
+            reranked = rerank(query, cand_texts, top_n=min(top_k, len(cand_ids)), api_key=api_key)
             final = [(cand_ids[idx], score) for idx, score in reranked]
         except Exception as e:  # noqa: BLE001
             logger.warning("rerank 失败，回退到混合排序: %s", e)
@@ -181,11 +181,11 @@ def _load_from_disk() -> HotelIndex | None:
         return None
 
 
-def _build() -> HotelIndex:
+def _build(api_key: str) -> HotelIndex:
     """加载 CSV → 向量化 → 构建 FAISS 索引并持久化。"""
     docs = load_hotels()
     texts = [d["text"] for d in docs]
-    vectors = embed_texts(texts, text_type="document")
+    vectors = embed_texts(texts, text_type="document", api_key=api_key)
     matrix = np.array(vectors, dtype="float32")
     faiss.normalize_L2(matrix)
     index = faiss.IndexFlatIP(EMBED_DIM)
@@ -200,10 +200,11 @@ def _build() -> HotelIndex:
 _hotel_index: HotelIndex | None = None
 
 
-def get_hotel_index(force_rebuild: bool = False) -> HotelIndex:
+def get_hotel_index(force_rebuild: bool = False, api_key: str = "") -> HotelIndex:
     """获取酒店索引单例；磁盘有索引时直接加载，否则首次调用时构建。
 
     force_rebuild=True 时跳过磁盘缓存，强制重新清洗、向量化并覆盖持久化文件。
+    api_key 仅在需要构建索引（首次或强制重建）时使用。
     """
     global _hotel_index
     if force_rebuild:
@@ -212,10 +213,10 @@ def get_hotel_index(force_rebuild: bool = False) -> HotelIndex:
         return _hotel_index
     with _build_lock:
         if _hotel_index is None:
-            _hotel_index = _build() if force_rebuild else (_load_from_disk() or _build())
+            _hotel_index = _build(api_key) if force_rebuild else (_load_from_disk() or _build(api_key))
     return _hotel_index
 
 
-def search_hotels(query: str, top_k: int = 5) -> list[dict]:
+def search_hotels(query: str, top_k: int = 5, api_key: str = "") -> list[dict]:
     """混合检索相关酒店（对 get_hotel_index 的便捷封装）。"""
-    return get_hotel_index().search(query, top_k=top_k)
+    return get_hotel_index(api_key=api_key).search(query, top_k=top_k, api_key=api_key)
