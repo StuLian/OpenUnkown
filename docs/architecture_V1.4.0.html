@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenUnknown 架构文档 V1.4.0</title>
+  <style>
+    :root {
+      --bg: #0f1117; --panel: #161922; --panel-2: #1d212c; --border: #2a2f3d;
+      --text: #e6e8ee; --muted: #9aa0ac; --accent: #6c8cff; --accent-2: #8a6cff;
+      --green: #5fcf80; --orange: #ffb86c; --pink: #ff8a9a; --red: #ff6c7a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1200px 600px at 80% -10%, #1a1d29 0%, var(--bg) 55%);
+      color: var(--text); line-height: 1.7; min-height: 100vh;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+    header.hero { border-bottom: 1px solid var(--border); padding-bottom: 28px; margin-bottom: 40px; }
+    .badge {
+      display: inline-block; font-size: 12px; font-weight: 600;
+      padding: 4px 12px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; letter-spacing: 0.5px;
+    }
+    h1 { font-size: 34px; margin: 16px 0 8px; font-weight: 700; letter-spacing: 0.5px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    h2 {
+      font-size: 22px; margin: 48px 0 18px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border); font-weight: 600;
+      display: flex; align-items: center; gap: 10px;
+    }
+    h2 .num {
+      font-size: 13px; color: var(--accent); font-weight: 700;
+      width: 28px; height: 28px; border-radius: 8px;
+      background: rgba(108,140,255,0.12); border: 1px solid rgba(108,140,255,0.3);
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    h3 { font-size: 16px; margin: 24px 0 10px; color: var(--text); font-weight: 600; }
+    p { margin: 10px 0; color: #d4d7de; }
+    code {
+      font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      background: var(--panel-2); padding: 2px 6px; border-radius: 5px;
+      font-size: 13px; color: var(--accent); border: 1px solid var(--border);
+    }
+    pre {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px 18px; overflow-x: auto;
+      font-size: 13px; line-height: 1.6;
+    }
+    pre code { background: none; border: none; padding: 0; color: #d4d7de; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    td code { font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+    .stat .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .stat .value { font-size: 18px; font-weight: 600; }
+    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 5px; margin-right: 6px; font-weight: 600; }
+    .tag.blue { background: rgba(108,140,255,0.15); color: var(--accent); border: 1px solid rgba(108,140,255,0.3); }
+    .tag.green { background: rgba(95,207,128,0.15); color: var(--green); border: 1px solid rgba(95,207,128,0.3); }
+    .tag.orange { background: rgba(255,184,108,0.15); color: var(--orange); border: 1px solid rgba(255,184,108,0.3); }
+    .tag.pink { background: rgba(255,138,154,0.15); color: var(--pink); border: 1px solid rgba(255,138,154,0.3); }
+    .tag.purple { background: rgba(138,108,255,0.15); color: var(--accent-2); border: 1px solid rgba(138,108,255,0.3); }
+    .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0; font-size: 13px; }
+    .flow .step { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-weight: 500; }
+    .flow .arrow { color: var(--accent); font-weight: 700; }
+    ul { padding-left: 22px; } ul li { margin: 6px 0; color: #d4d7de; }
+    .meta-row { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .note { border-left: 3px solid var(--orange); background: rgba(255,184,108,0.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .success { border-left: 3px solid var(--green); background: rgba(95,207,128,0.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .todo { border-left: 3px solid var(--orange); background: rgba(255,184,108,0.08); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .todo strong { color: var(--orange); }
+    footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+    .version-tag {
+      position: fixed; top: 16px; right: 20px; z-index: 50;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+      padding: 6px 14px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; box-shadow: 0 4px 16px rgba(108,140,255,0.35);
+    }
+    .mermaid { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin: 16px 0; text-align: center; overflow-x: auto; }
+    .changelog { font-size: 14px; }
+    .changelog li { margin: 8px 0; }
+    .changelog .new { color: var(--green); font-weight: 600; }
+    .changelog .refactor { color: var(--purple, #8a6cff); font-weight: 600; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: "dark",
+      themeVariables: {
+        primaryColor: "#1d212c", primaryBorderColor: "#6c8cff",
+        primaryTextColor: "#e6e8ee", lineColor: "#6c8cff",
+        fontFamily: "-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif"
+      }
+    });
+  </script>
+</head>
+<body>
+  <div class="version-tag">V1.4.0</div>
+  <div class="wrap">
+    <header class="hero">
+      <span class="badge">V1.4.0</span>
+      <h1>OpenUnknown 架构文档</h1>
+      <div class="subtitle">思考模式 · 接口模块化 · RAG 检索</div>
+      <div class="meta-row">文档版本 1.4.0 &nbsp;|&nbsp; 生成日期 2026-08-25</div>
+    </header>
+
+    <section>
+      <h2><span class="num">0</span>V1.4.0 变更摘要</h2>
+      <p>V1.3.0 补齐了浏览器能力，但还缺三块：回答只有「快速模式」一档、HTTP 层散落在主入口里、知识面局限于联网搜索与飞书。V1.4.0 引入<strong>思考模式</strong>（透传 DashScope 的思维链 reasoning_content）、把 HTTP 层<strong>接口模块化</strong>（路由按业务域拆分）、并<strong>注入 RAG 检索</strong>（基于西雅图酒店数据，向量 + BM25 混合检索 + 位置过滤 + 重排）。</p>
+      <ul class="changelog">
+        <li><span class="new">[新增]</span> <strong>思考模式</strong>：<code>MODES</code> 增加 thinking 档，<code>ThinkingChatOpenAI</code> 保留流式中的 <code>reasoning_content</code>，前端可展示思维链后再看最终答案。</li>
+        <li><span class="new">[新增]</span> <strong>RAG 检索</strong>：新增 <code>backend/rag/</code> 包（清洗/切片/向量化/BM25/RRF/位置过滤/rerank），封装为 <code>search_hotels</code> 工具接入 Agent。</li>
+        <li><span class="refactor">[重构]</span> <strong>接口模块化</strong>：HTTP 层统一收进 <code>backend/api/</code>，路由按 chat / sessions / mcp 三个业务域拆分，<code>main.py</code> 只做组装。</li>
+      </ul>
+
+      <h3>量化效果</h3>
+      <div class="grid">
+        <div class="stat"><div class="label">新增回答模式</div><div class="value" style="color:var(--green)">1<span style="font-size:12px;color:var(--muted);margin-left:6px">thinking</span></div></div>
+        <div class="stat"><div class="label">新增 RAG 模块</div><div class="value" style="color:var(--green)">6<span style="font-size:12px;color:var(--muted);margin-left:6px">loader/embeddings/bm25/rerank/location/index</span></div></div>
+        <div class="stat"><div class="label">新增检索工具</div><div class="value" style="color:var(--green)">1<span style="font-size:12px;color:var(--muted);margin-left:6px">search_hotels</span></div></div>
+        <div class="stat"><div class="label">新增运行时依赖</div><div class="value" style="color:var(--orange)">2<span style="font-size:12px;color:var(--muted);margin-left:6px">faiss-cpu + numpy</span></div></div>
+        <div class="stat"><div class="label">API 路由拆分</div><div class="value" style="color:var(--green)">3<span style="font-size:12px;color:var(--muted);margin-left:6px">chat / sessions / mcp</span></div></div>
+        <div class="stat"><div class="label">向量维度</div><div class="value" style="color:var(--green)">1024<span style="font-size:12px;color:var(--muted);margin-left:6px">text-embedding-v3</span></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="num">1</span>思考模式：透传思维链</h2>
+      <p>V1.3.0 之前只有「快速模式」（直接出答案）。V1.4.0 新增 <code>thinking</code> 模式，利用 DashScope 兼容接口的 <code>enable_thinking</code> 参数开启深度推理：模型先输出 <code>reasoning_content</code>（思维链），再输出 <code>content</code>（最终答案）。难点在于 langchain-openai 0.2.14 的流式转换<strong>默认丢弃</strong> reasoning_content，需要子类拦截。</p>
+
+      <h3>1.1 模式定义</h3>
+      <pre><code>MODES = [
+    {"id": "fast",     "name": "快速模式", "description": "直接回答，低延迟",         "enable_thinking": False},
+    {"id": "thinking", "name": "思考模式", "description": "深度思考后再回答",         "enable_thinking": True},
+]
+DEFAULT_MODE = "fast"
+
+def mode_enables_thinking(mode_id):
+    for m in MODES:
+        if m["id"] == mode_id:
+            return bool(m.get("enable_thinking"))
+    return False</code></pre>
+
+      <h3>1.2 完整链路</h3>
+      <pre class="mermaid">
+flowchart TD
+    A["前端选择思考模式 mode=thinking"] --> B["_chat_node 读取 config.mode"]
+    B --> C["mode_enables_thinking 返回 true"]
+    C --> D["get_llm(model, enable_thinking=true)"]
+    D --> E["extra_body: enable_thinking=true"]
+    E --> F["DashScope 流式返回"]
+    F --> G["reasoning_content 思维链增量"]
+    F --> H["content 最终答案"]
+    G --> I["ThinkingChatOpenAI 保留到 additional_kwargs"]
+    H --> J["AIMessageChunk.content"]
+    I --> K["SSE thinking 事件"]
+    J --> L["SSE delta 事件"]
+    K --> M["前端展示思考过程"]
+    L --> N["前端展示最终答案"]
+      </pre>
+
+      <h3>1.3 关键实现：保留 reasoning_content</h3>
+      <p>langchain-openai 原生只映射 <code>content</code> / <code>tool_calls</code> 字段，会把思维链丢掉。因此定义 <code>ThinkingChatOpenAI(ChatOpenAI)</code> 子类，重写 <code>_stream</code> / <code>_astream</code>，用自定义的 <code>_convert_chunk_with_reasoning()</code> 把每个 delta 里的 <code>reasoning_content</code> 塞进 <code>additional_kwargs</code>。</p>
+      <pre><code>class ThinkingChatOpenAI(ChatOpenAI):
+    """保留 reasoning_content 的 ChatOpenAI 子类。"""
+    def _astream(self, messages, stop=None, run_manager=None, **kwargs):
+        kwargs["stream"] = True
+        payload = self._get_request_payload(messages, stop=stop, **kwargs)
+        response = await self.async_client.create(**payload)
+        async with response:
+            for chunk in response:
+                generation_chunk = _convert_chunk_with_reasoning(chunk, ...)
+                if generation_chunk is None:
+                    continue
+                yield generation_chunk</code></pre>
+      <p>在 <code>_convert_chunk_with_reasoning</code> 里，核心只有一行：把 delta 上的 <code>reasoning_content</code> 存到消息块的 <code>additional_kwargs["reasoning_content"]</code>，其余沿用原生转换逻辑。</p>
+
+      <h3>1.4 SSE 双通道推流</h3>
+      <pre><code># streaming.py：思考模式额外推送 thinking 事件
+if mode_enables_thinking(mode):
+    reasoning = chunk.additional_kwargs.get("reasoning_content")
+    if isinstance(reasoning, str) and reasoning:
+        yield sse_event({"thinking": reasoning})   # 思维链
+text = chunk.content
+if isinstance(text, str) and text:
+    yield sse_event({"delta": text})               # 最终答案</code></pre>
+      <div class="success"><strong>快速模式零影响</strong>：<code>enable_thinking=False</code> 时不传 <code>extra_body</code>，也不推送 <code>thinking</code> 事件，行为与 V1.3.0 完全一致。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">2</span>接口模块化：HTTP 层按业务域拆分</h2>
+      <p>V1.3.0 的路由、请求体模型、流式逻辑混在一起。V1.4.0 把 HTTP 层统一收进 <code>backend/api/</code> 包：<strong>路由在 <code>api/routers/</code>、公共流式逻辑在 <code>api/streaming.py</code>、请求体模型在 <code>api/schemas.py</code></strong>，<code>main.py</code> 退化为纯组装入口。</p>
+
+      <h3>2.1 分层结构</h3>
+      <pre><code>backend/api/
+├── __init__.py
+├── schemas.py        # Pydantic 请求体模型（ChatRequest / McpServerSaveRequest / ...）
+├── streaming.py      # SSE 打包、message_to_dict、stream_answer 公共逻辑
+└── routers/
+    ├── __init__.py   # 包说明 + 导出
+    ├── chat.py       # POST /api/chat 流式问答、GET /api/models、GET /api/modes
+    ├── sessions.py   # /api/sessions 会话列表/新建/删除/历史
+    └── mcp.py        # /api/mcp/servers MCP 配置增删改查、测试、导入</code></pre>
+
+      <h3>2.2 主入口只做组装</h3>
+      <pre><code># main.py
+from backend.api.routers import chat, mcp, sessions
+
+app = FastAPI(title=APP_NAME)
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
+
+app.include_router(chat.router)
+app.include_router(sessions.router)
+app.include_router(mcp.router)</code></pre>
+
+      <h3>2.3 各路由职责</h3>
+      <table>
+        <thead><tr><th>路由模块</th><th>前缀 / 标签</th><th>职责</th></tr></thead>
+        <tbody>
+          <tr><td><code>chat.py</code></td><td><code>/api</code></td><td>流式问答（<code>/chat</code>）、模型与模式元信息（<code>/models</code>、<code>/modes</code>）</td></tr>
+          <tr><td><code>sessions.py</code></td><td><code>/api/sessions</code></td><td>会话列表、新建、删除、历史消息</td></tr>
+          <tr><td><code>mcp.py</code></td><td><code>/api/mcp</code></td><td>MCP Server 的增删改查、启停、测试、JSON 导入</td></tr>
+        </tbody>
+      </table>
+      <p>请求体模型集中在 <code>schemas.py</code>，例如 <code>ChatRequest</code> 里新增了 <code>mode</code> 字段（供思考模式使用），避免路由文件里内联散落 Pydantic 定义。</p>
+      <div class="note">拆分后新增接口只需在对应域路由文件里加函数，<code>main.py</code> 与其它域零改动，降低并行开发冲突。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">3</span>RAG 检索：向量 + BM25 混合检索</h2>
+      <p>RAG 让 Agent 拥有「私有知识库」能力。以 <code>csv/Seattle_Hotels.csv</code>（152 家酒店）为语料，完整链路是：<strong>清洗 → 切片 → 向量化 → FAISS 索引 → 混合检索（BM25 + 向量 + RRF）→ 位置过滤 → Rerank 重排 → LLM 生成</strong>。检索能力封装成 <code>search_hotels</code> 工具，沿用关键词预筛机制按需绑定。</p>
+
+      <h3>3.1 整体链路</h3>
+      <pre class="mermaid">
+flowchart TD
+    subgraph OFF["离线阶段 · 数据入库"]
+        A["CSV 原始数据 cp1252"] --> B["数据清洗 loader.py"]
+        B --> C["切片 Chunking 一店一 chunk"]
+        C --> D["向量化 text-embedding-v3 1024维"]
+        D --> E["FAISS 索引 余弦"]
+    end
+    subgraph ON["在线阶段 · 检索生成"]
+        Q["用户查询"] --> F["查询向量化"]
+        Q --> H["BM25 词法检索"]
+        F --> G["向量检索"]
+        G --> I["RRF 融合"]
+        H --> I
+        I --> J["位置过滤 downtown/airport"]
+        J --> K["Rerank 重排 gte-rerank-v2"]
+        K --> L["LLM 生成"]
+    end
+    E -.加载.-> G
+      </pre>
+
+      <h3>3.2 数据清洗与切片</h3>
+      <p>原始 CSV 是 <code>cp1252</code> 编码，desc 里混有换行与乱码问号（撇号被替换成 <code>?</code>）。清洗做转码、折叠空白、修正缩写；切片采用<strong>「一店一 chunk」</strong>策略——desc 平均约 975 字符，正好落在理想 chunk 长度，无需二次切分。</p>
+      <pre><code>def load_hotels():
+    docs = []
+    with open(CSV_PATH, newline="", encoding="cp1252") as f:
+        for row in csv.DictReader(f):
+            name = clean_text(row.get("name", ""))
+            address = clean_text(row.get("address", ""))
+            desc = clean_text(row.get("desc", ""))
+            text = f"{name}. {address}. {desc}"   # 一店一段 = 一个切片
+            docs.append(HotelDoc(name=name, address=address, desc=desc,
+                                 text=text,
+                                 location=extract_locations(name, address)))
+    return docs</code></pre>
+
+      <h3>3.3 向量化与 FAISS 索引</h3>
+      <pre><code># embeddings.py：DashScope text-embedding-v3，1024 维，批量上限 10
+def embed_texts(texts, text_type="document"):
+    ...
+    resp = TextEmbedding.call(model="text-embedding-v3", input=batch,
+                              dimension=1024, text_type=text_type, api_key=api_key)
+    ...
+
+# index.py：L2 归一化后做内积 = 余弦相似度，持久化到 data/hotels/
+matrix = np.array(vectors, dtype="float32")
+faiss.normalize_L2(matrix)
+index = faiss.IndexFlatIP(EMBED_DIM)
+index.add(matrix)</code></pre>
+
+      <h3>3.4 混合检索：BM25 + 向量 + RRF</h3>
+      <p>向量擅长语义，但「泳池 / 热水浴缸 / 机场班车」这类精确设施词，BM25 词法命中更准。两路各自产出「文档 → 排名」，再用 <b>RRF（倒数排名融合）</b>合并——只认名次、不看分数，无需归一化。</p>
+      <pre><code>def rrf_fuse(rank_maps, k=60):
+    fused = {}
+    for ranks in rank_maps:
+        for doc_id, rank in ranks.items():
+            fused[doc_id] = fused.get(doc_id, 0.0) + 1.0 / (k + rank)
+    return sorted(fused.items(), key=lambda x: -x[1])</code></pre>
+
+      <h3>3.5 位置过滤 + Rerank 精排</h3>
+      <p>纯内容匹配无法严格满足「downtown 只返回市中心」。位置过滤用<b>邮编 + 城市名 + 名称关键词</b>三路信号提取规范标签，查询时识别位置意图做硬过滤；Rerank 用交叉编码模型 <code>gte-rerank-v2</code> 对粗排前 20 名逐字精排。</p>
+      <pre><code># location.py：邮编是识别市中心最可靠的信号
+_ZIP_TAGS = {"98101": "downtown", "98104": "downtown", "98121": "downtown",
+             "98188": "airport",  "98198": "airport", "98105": "university district"}
+
+# index.py：位置过滤 + 重排
+loc_tags = detect_query_locations(query)
+if loc_tags:
+    allowed = {i for i, d in enumerate(self.docs)
+               if set(d.get("location", [])) &amp; set(loc_tags)}
+    if allowed:
+        vec_ranks = _refilter_ranks(vec_ranks, allowed)
+        bm25_ranks = _refilter_ranks(bm25_ranks, allowed)
+fused = rrf_fuse([vec_ranks, bm25_ranks])
+reranked = rerank(query, [self.docs[i]["text"] for i in cand_ids], top_n=top_k)</code></pre>
+
+      <h3>3.6 工具接入</h3>
+      <pre><code># backend/agent/tools/hotels.py
+@tool
+def search_hotels(query: str, top_k: int = 5) -&gt; str:
+    """在西雅图酒店数据中检索相关酒店。
+
+    当用户询问西雅图的酒店推荐、找酒店、酒店设施（泳池/健身房/餐厅等）、
+    位置（市中心/机场/海滨等）时必须调用本工具，不要凭记忆编造酒店信息。
+    """
+    top_k = max(1, min(int(top_k), 10))
+    results = _rag_search_hotels(query, top_k=top_k)
+    return _format_result(results)</code></pre>
+      <p>graph.py 新增 <code>_HOTEL_KWS</code> 关键词组 + <code>want["hotel"]</code> 标志，命中「酒店 / hotel / 西雅图 / 泳池…」才绑定 <code>search_hotels</code>，延续 V1.2.0 起的按需绑定机制。</p>
+      <div class="success">检索结果示例：「hotel with hot tub」经 RRF 把向量漏掉的 Travelodge 捞进候选集，rerank 精排到第一；「free breakfast downtown」经位置过滤不再误返南郊 Tukwila。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">4</span>目录结构变更</h2>
+      <pre><code>backend/
+├── main.py               # 【改】退化为纯组装入口
+├── config.py             # 【改】新增 MODES / DEFAULT_MODE / mode_enables_thinking
+├── api/                  # 【重构】HTTP 层统一收编
+│   ├── schemas.py        # 【改】ChatRequest 新增 mode 字段
+│   ├── streaming.py      # 【改】思考模式推送 thinking 事件
+│   └── routers/
+│       ├── chat.py       # 问答 + 模型/模式元信息
+│       ├── sessions.py   # 会话管理
+│       └── mcp.py        # MCP 配置管理
+├── agent/
+│   ├── graph.py          # 【改】mode 读取 + _HOTEL_KWS / want["hotel"]
+│   ├── llm.py            # 【改】ThinkingChatOpenAI 保留 reasoning_content
+│   ├── prompts.py
+│   └── tools/
+│       ├── __init__.py   # 【改】注册 search_hotels
+│       ├── hotels.py     # 【新增】search_hotels 检索工具
+│       ├── weather.py
+│       ├── browser_use.py
+│       └── lark_cli.py
+└── rag/                  # 【新增】RAG 检索包
+    ├── __init__.py       # 对外暴露 get_hotel_index / search_hotels
+    ├── loader.py         # 清洗 + 切片
+    ├── embeddings.py     # DashScope 向量化
+    ├── bm25.py           # BM25 词法打分
+    ├── rerank.py         # gte-rerank-v2 重排
+    ├── location.py       # 位置标签提取与识别
+    └── index.py          # FAISS 构建 + 混合检索编排
+</code></pre>
+    </section>
+
+    <section>
+      <h2><span class="num">5</span>关键设计决策</h2>
+      <ul>
+        <li><strong>思考模式走「子类保留」而非改依赖</strong>：langchain-openai 流式转换丢弃 <code>reasoning_content</code>，通过 <code>ThinkingChatOpenAI</code> 子类 + 自定义 chunk 转换补齐，不动第三方库源码，升级时不破坏。</li>
+        <li><strong>快速模式是默认且零开销</strong>：<code>enable_thinking=False</code> 时不传 <code>extra_body</code>、不推 thinking 事件，保证存量用户行为不变。</li>
+        <li><strong>接口模块化按业务域而非按层</strong>：chat / sessions / mcp 各自成 router，公共流式逻辑上提到 <code>streaming.py</code>，请求体模型集中到 <code>schemas.py</code>，新接口只改对应域文件。</li>
+        <li><strong>RAG 包对 Agent 完全无感</strong>：<code>backend/rag/</code> 是独立可跑的检索库，只通过 <code>search_hotels</code> 工具与 Agent 连接，可在其它场景复用。</li>
+        <li><strong>一店一 chunk，不盲目套固定长度切分</strong>：结构化业务数据每家酒店就是天然检索单元，desc 平均 975 字符落在理想区间，避免无效切分。</li>
+        <li><strong>混合检索「召回 + 精排」两级漏斗</strong>：向量 + BM25 双塔负责广撒网（快），RRF 融合取前 20 后交给 gte-rerank-v2 交叉编码精排（慢但准），兼顾性能与精度。</li>
+        <li><strong>位置过滤用规则词典而非坐标 API</strong>：邮编 + 城市名 + 名称关键词三路信号，零外部依赖、可解释、好排查；代价是规则表外的冷门区域识别不到。</li>
+        <li><strong>索引懒加载单例 + 磁盘持久化</strong>：首次查询才构建/加载索引，152 条向量落盘 <code>data/hotels/</code>，重启 0.23 秒加载，不重复调用 embedding。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">6</span>待优化清单</h2>
+      <div class="todo">
+        <strong>问题 1：思考模式推理过程未做历史压缩</strong><br/>
+        思维链会随 <code>additional_kwargs</code> 进入消息历史，长对话下 reasoning_content 累积可能撑大上下文。<br/>
+        优化方向：checkpoint 里不存 reasoning_content，或对历史思维链做截断，只保留最终答案。
+      </div>
+      <div class="todo">
+        <strong>问题 2：RAG 位置标签靠手工规则表</strong><br/>
+        邮编/城市/关键词规则覆盖不了规则外的冷门社区（如 Ballard 之外的社区），且新增城市需手动补表。<br/>
+        优化方向：接入地理编码 API 把地址转成结构化坐标/邻域，或对无标签酒店做聚类标注。
+      </div>
+      <div class="todo">
+        <strong>问题 3：rerank 每次查询多一次网络调用</strong><br/>
+        <code>gte-rerank-v2</code> 对前 20 名精排带来额外延迟，简单查询（如品牌精确匹配）收益有限。<br/>
+        优化方向：对 RRF 分数足够高、分歧小的查询跳过 rerank，按需触发。
+      </div>
+      <div class="todo">
+        <strong>问题 4：接口模块化未覆盖前端路由层</strong><br/>
+        本次只拆了后端 HTTP 层，前端仍是单页结构，模型/模式选择器与聊天逻辑耦合。<br/>
+        优化方向：前端按「会话 / 聊天 / 设置」拆模块，与后端路由域对齐。
+      </div>
+    </section>
+
+    <footer>
+      OpenUnknown 架构文档 · V1.4.0 · 2026-08-25 · 思考模式 · 接口模块化 · RAG 检索
+    </footer>
+  </div>
+</body>
+</html>

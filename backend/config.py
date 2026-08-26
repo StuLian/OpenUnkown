@@ -1,9 +1,16 @@
 """应用全局配置。"""
 from __future__ import annotations
 
+import os
 from functools import lru_cache
+from pathlib import Path
 
 from dashscope.common.api_key import get_default_api_key
+from dotenv import load_dotenv
+
+# 尽早加载项目根目录的 .env（backend/ 的上一级），
+# 使 LangSmith 等环境变量配置无需手动 export 即可生效。
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
 
 
 # DashScope 的 OpenAI 兼容接入地址，配合 langchain-openai 使用
@@ -39,6 +46,12 @@ DEFAULT_MODE = "fast"
 
 # 应用名称
 APP_NAME = "OpenUnknown"
+
+# LangSmith 追踪（可选）：在 .env 里设置 LANGSMITH_API_KEY 即自动开启。
+# LangGraph/LangChain 应用无需额外埋点代码，环境变量生效即可，详见 README。
+# 未显式指定项目名时，默认用应用名作为 LangSmith 项目名，便于控制台区分。
+if not os.getenv("LANGSMITH_PROJECT") and not os.getenv("LANGCHAIN_PROJECT"):
+    os.environ["LANGSMITH_PROJECT"] = APP_NAME
 
 _MODEL_IDS = {m["id"] for m in AVAILABLE_MODELS}
 _MODE_IDS = {m["id"] for m in MODES}

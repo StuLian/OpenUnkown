@@ -5,6 +5,8 @@ langgraph-checkpoint>=2.0.4,<3.0.0
 langgraph-checkpoint-sqlite>=2.0.0,<3.0.0
 langchain-core==0.3.28
 langchain-openai==0.2.14
+langsmith==0.2.11
+python-dotenv==1.2.3
 dashscope==1.20.14
 faiss-cpu>=1.8.0
 numpy>=1.25

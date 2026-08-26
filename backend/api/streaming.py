@@ -44,7 +44,16 @@ async def stream_answer(message: str, session_id: str, model: str, mode: str, re
     store.touch_session(session_id)
 
     graph = await get_graph()
-    config = {"configurable": {"thread_id": session_id, "model": model, "mode": mode}}
+    config = {
+        "configurable": {"thread_id": session_id, "model": model, "mode": mode},
+        # LangSmith 元信息：tags 便于过滤，metadata 便于在控制台检索本次会话/模型/模式
+        "tags": ["openunknown", f"model:{model}", f"mode:{mode}"],
+        "metadata": {
+            "session_id": session_id,
+            "model": model,
+            "mode": mode,
+        },
+    }
     inputs = {"messages": [HumanMessage(content=message)]}
     usage: dict | None = None
 
