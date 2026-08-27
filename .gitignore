@@ -4,3 +4,18 @@
 !.env.example
 data/.app_secret
 data/.app_master_key
+
+# ===== 私钥 / 证书（私钥绝不能入库，仓库是公开的）=====
+deploy/*.key
+deploy/*.pem
+
+# ===== 打包产物 =====
+*.tar.gz
+
+# ===== macOS 垃圾文件 =====
+.DS_Store
+
+# ===== 数据库（含用户数据与加密 ApiKey，不入库）=====
+data/openunknown.db
+data/openunknown.db-shm
+data/openunknown.db-wal

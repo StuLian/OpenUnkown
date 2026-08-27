@@ -1,0 +1,18 @@
+[Unit]
+Description=OpenUnknown FastAPI service
+After=network.target
+
+[Service]
+Type=simple
+User=openunknown
+Group=openunknown
+WorkingDirectory=/opt/openunknown
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/openunknown/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
