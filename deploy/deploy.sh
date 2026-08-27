@@ -33,17 +33,19 @@ if command -v dnf >/dev/null 2>&1; then
   PM="dnf"; INSTALL="dnf install -y"
   PY_PKGS="python3 python3-pip python3-devel"
   PY312_PKGS="python3.12 python3.12-pip python3.12-devel"
+  SQLITE_PKG="sqlite"
 else
   PM="apt"; INSTALL="apt-get install -y"
   PY_PKGS="python3 python3-venv python3-pip"
   PY312_PKGS=""
+  SQLITE_PKG="sqlite3"
   apt-get update -y
 fi
 log "包管理器：$PM"
 
 # ---- 1. 系统依赖 ----
 log "安装系统依赖..."
-$INSTALL git $PY_PKGS nginx sqlite3 curl ca-certificates
+$INSTALL git $PY_PKGS nginx "$SQLITE_PKG" curl ca-certificates
 
 # ---- 2. Python 3.12（dnf 系尝试，失败用系统自带）----
 if [[ -n "$PY312_PKGS" ]]; then
@@ -82,6 +84,7 @@ fi
 chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
 chmod 600 "$APP_DIR/data/.app_secret"     2>/dev/null || true
 chmod 600 "$APP_DIR/data/.app_master_key" 2>/dev/null || true
+chmod 600 "$APP_DIR/data/.app_auth_key"   2>/dev/null || true
 
 # ---- 8. systemd 服务 ----
 log "安装/更新 systemd 服务..."

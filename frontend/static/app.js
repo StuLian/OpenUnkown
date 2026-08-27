@@ -157,6 +157,39 @@ function doLogout() {
   showAuth();
 }
 
+// ===== 登录密码 RSA-OAEP 加密（请求体不传明文密码） =====
+function pemToArrayBuffer(pem) {
+  const b64 = pem.replace(/-----(BEGIN|END)[^-]+-----/g, "").replace(/\s+/g, "");
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function arrayBufferToBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+async function encryptPassword(publicKeyPem, password) {
+  const key = await crypto.subtle.importKey(
+    "spki",
+    pemToArrayBuffer(publicKeyPem),
+    { name: "RSA-OAEP", hash: "SHA-256" },
+    false,
+    ["encrypt"]
+  );
+  const data = new TextEncoder().encode(password);
+  // RSA-2048 + OAEP-SHA256 的最大明文长度是 190 字节
+  if (data.length > 190) {
+    throw new Error("密码过长");
+  }
+  const ciphertext = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, key, data);
+  return arrayBufferToBase64(ciphertext);
+}
+
 authLoginTab.addEventListener("click", () => setAuthMode("login"));
 authRegisterTab.addEventListener("click", () => setAuthMode("register"));
 
@@ -170,11 +203,23 @@ authForm.addEventListener("submit", async (e) => {
   }
   authSubmitBtn.disabled = true;
   try {
+    // 先获取服务端 RSA 公钥与一次性 nonce，再加密密码
+    const chalResp = await fetch("/api/auth/challenge");
+    const chal = await chalResp.json();
+    if (!chalResp.ok || !chal.nonce || !chal.public_key_pem) {
+      showAuthError("获取登录校验信息失败，请重试");
+      return;
+    }
+    const passwordCiphertext = await encryptPassword(chal.public_key_pem, password);
     const url = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
     const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({
+        username,
+        password_ciphertext: passwordCiphertext,
+        nonce: chal.nonce,
+      }),
     });
     const data = await resp.json();
     if (!resp.ok) {

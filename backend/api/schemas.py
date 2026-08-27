@@ -53,14 +53,16 @@ class ApiKeyTestRequest(BaseModel):
 
 
 class RegisterRequest(BaseModel):
-    """注册请求体。"""
+    """注册请求体。密码经 RSA-OAEP 加密，请求体中不含明文。"""
 
     username: str
-    password: str
+    password_ciphertext: str
+    nonce: str
 
 
 class LoginRequest(BaseModel):
-    """登录请求体。"""
+    """登录请求体。密码经 RSA-OAEP 加密，请求体中不含明文。"""
 
     username: str
-    password: str
+    password_ciphertext: str
+    nonce: str

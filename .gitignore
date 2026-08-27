@@ -2,8 +2,13 @@
 .env
 .env.*
 !.env.example
+
+# ===== Python 编译产物 =====
+__pycache__/
+*.pyc
 data/.app_secret
 data/.app_master_key
+data/.app_auth_key
 
 # ===== 私钥 / 证书（私钥绝不能入库，仓库是公开的）=====
 deploy/*.key

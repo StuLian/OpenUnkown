@@ -9,7 +9,7 @@ from backend.auth import service
 from backend.auth.deps import get_current_user_id
 from backend.auth.tokens import create_token
 from backend.config import DEFAULT_PLATFORM
-from backend.security import crypto
+from backend.security import challenge, crypto
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -31,6 +31,16 @@ def _validate_credentials(username: str, password: str) -> tuple[str, str]:
     return username, password
 
 
+def _extract_password(req: LoginRequest | RegisterRequest) -> str:
+    """消费 nonce 并用服务端私钥解出明文密码；失败返回 400。"""
+    if not challenge.consume_nonce(req.nonce):
+        raise HTTPException(status_code=400, detail="验证信息已过期，请重试")
+    password = challenge.decrypt_password(req.password_ciphertext)
+    if password is None:
+        raise HTTPException(status_code=400, detail="密码解密失败，请重试")
+    return password
+
+
 def _user_view(user: dict) -> dict:
     return {
         "user_id": user["id"],
@@ -39,10 +49,19 @@ def _user_view(user: dict) -> dict:
     }
 
 
+@router.get("/challenge")
+def get_challenge() -> dict:
+    """下发 RSA 公钥与一次性 nonce，供前端加密密码后提交登录/注册。"""
+    return {
+        "nonce": challenge.issue_nonce(),
+        "public_key_pem": challenge.get_public_key_pem(),
+    }
+
+
 @router.post("/register")
 def register(req: RegisterRequest) -> dict:
     """注册新用户并直接登录，返回 JWT 与用户信息。"""
-    username, password = _validate_credentials(req.username, req.password)
+    username, password = _validate_credentials(req.username, _extract_password(req))
     if store.get_user_by_username(username):
         raise HTTPException(status_code=409, detail="用户名已存在")
     dek_ciphertext = service.generate_dek_ciphertext()
@@ -56,8 +75,9 @@ def register(req: RegisterRequest) -> dict:
 def login(req: LoginRequest) -> dict:
     """校验用户名密码，登录成功后返回 JWT 与用户信息。"""
     username = (req.username or "").strip()
+    password = _extract_password(req)
     user = store.get_user_by_username(username)
-    if not user or not crypto.verify_password(req.password or "", user["password_hash"]):
+    if not user or not crypto.verify_password(password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     return {"token": create_token(user["id"]), "user": _user_view(user)}
 
