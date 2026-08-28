@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenUnknown 架构文档 V1.5.0</title>
+  <style>
+    :root {
+      --bg: #0f1117; --panel: #161922; --panel-2: #1d212c; --border: #2a2f3d;
+      --text: #e6e8ee; --muted: #9aa0ac; --accent: #6c8cff; --accent-2: #8a6cff;
+      --green: #5fcf80; --orange: #ffb86c; --pink: #ff8a9a; --red: #ff6c7a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1200px 600px at 80% -10%, #1a1d29 0%, var(--bg) 55%);
+      color: var(--text); line-height: 1.7; min-height: 100vh;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 48px 28px 80px; }
+    header.hero { border-bottom: 1px solid var(--border); padding-bottom: 28px; margin-bottom: 40px; }
+    .badge {
+      display: inline-block; font-size: 12px; font-weight: 600;
+      padding: 4px 12px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; letter-spacing: 0.5px;
+    }
+    h1 { font-size: 34px; margin: 16px 0 8px; font-weight: 700; letter-spacing: 0.5px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    h2 {
+      font-size: 22px; margin: 48px 0 18px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border); font-weight: 600;
+      display: flex; align-items: center; gap: 10px;
+    }
+    h2 .num {
+      font-size: 13px; color: var(--accent); font-weight: 700;
+      width: 28px; height: 28px; border-radius: 8px;
+      background: rgba(108,140,255,0.12); border: 1px solid rgba(108,140,255,0.3);
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    h3 { font-size: 16px; margin: 24px 0 10px; color: var(--text); font-weight: 600; }
+    p { margin: 10px 0; color: #d4d7de; }
+    code {
+      font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      background: var(--panel-2); padding: 2px 6px; border-radius: 5px;
+      font-size: 13px; color: var(--accent); border: 1px solid var(--border);
+    }
+    pre {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px 18px; overflow-x: auto;
+      font-size: 13px; line-height: 1.6;
+    }
+    pre code { background: none; border: none; padding: 0; color: #d4d7de; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    td code { font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+    .stat .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .stat .value { font-size: 18px; font-weight: 600; }
+    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 5px; margin-right: 6px; font-weight: 600; }
+    .tag.blue { background: rgba(108,140,255,0.15); color: var(--accent); border: 1px solid rgba(108,140,255,0.3); }
+    .tag.green { background: rgba(95,207,128,0.15); color: var(--green); border: 1px solid rgba(95,207,128,0.3); }
+    .tag.orange { background: rgba(255,184,108,0.15); color: var(--orange); border: 1px solid rgba(255,184,108,0.3); }
+    .tag.pink { background: rgba(255,138,154,0.15); color: var(--pink); border: 1px solid rgba(255,138,154,0.3); }
+    .tag.purple { background: rgba(138,108,255,0.15); color: var(--accent-2); border: 1px solid rgba(138,108,255,0.3); }
+    .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0; font-size: 13px; }
+    .flow .step { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-weight: 500; }
+    .flow .arrow { color: var(--accent); font-weight: 700; }
+    ul { padding-left: 22px; } ul li { margin: 6px 0; color: #d4d7de; }
+    .meta-row { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .note { border-left: 3px solid var(--orange); background: rgba(255,184,108,0.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .success { border-left: 3px solid var(--green); background: rgba(95,207,128,0.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .todo { border-left: 3px solid var(--orange); background: rgba(255,184,108,0.08); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .todo strong { color: var(--orange); }
+    footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+    .version-tag {
+      position: fixed; top: 16px; right: 20px; z-index: 50;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+      padding: 6px 14px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; box-shadow: 0 4px 16px rgba(108,140,255,0.35);
+    }
+    .mermaid { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin: 16px 0; text-align: center; overflow-x: auto; }
+    .changelog { font-size: 14px; }
+    .changelog li { margin: 8px 0; }
+    .changelog .new { color: var(--green); font-weight: 600; }
+    .changelog .refactor { color: var(--purple, #8a6cff); font-weight: 600; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true, theme: "dark",
+      themeVariables: {
+        primaryColor: "#1d212c", primaryBorderColor: "#6c8cff",
+        primaryTextColor: "#e6e8ee", lineColor: "#6c8cff",
+        fontFamily: "-apple-system, BlinkMacSystemFont, PingFang SC, sans-serif"
+      }
+    });
+  </script>
+</head>
+<body>
+  <div class="version-tag">V1.5.0</div>
+  <div class="wrap">
+    <header class="hero">
+      <span class="badge">V1.5.0</span>
+      <h1>OpenUnknown 架构文档</h1>
+      <div class="subtitle">LangSmith 追踪 · 密钥加密 · 集成部署</div>
+      <div class="meta-row">文档版本 1.5.0 &nbsp;|&nbsp; 生成日期 2026-08-27</div>
+    </header>
+
+    <section>
+      <h2><span class="num">0</span>V1.5.0 变更摘要</h2>
+      <p>V1.4.0 补齐了思考模式、接口模块化与 RAG 检索，但应用仍处于「裸奔」状态：运行过程不可观测、密钥要么明文要么散落在代码里、也没有一套能上生产的一键部署方案。V1.5.0 把这三块一次性补上：接入 <strong>LangSmith 全链路追踪</strong>、建立<strong>「ignore + 加密」双层密钥治理</strong>（登录 + JWT + 信封加密）、并沉淀出<strong>systemd + Nginx 的集成部署方案</strong>。</p>
+      <ul class="changelog">
+        <li><span class="new">[新增]</span> <strong>LangSmith 追踪</strong>：<code>langsmith</code> 依赖 + <code>.env</code> 环境变量即开即用，零埋点自动上报 agent / LLM / 工具调用，trace 附带 tags 与 metadata。</li>
+        <li><span class="new">[新增]</span> <strong>登录与多用户隔离</strong>：本地账号密码 + JWT 会话，密码走 <code>RSA-OAEP</code> 传输加密 + <code>PBKDF2</code> 落库散列，会话 / MCP / ApiKey 全部按用户隔离。</li>
+        <li><span class="new">[新增]</span> <strong>密钥加密体系</strong>：ApiKey 信封加密落库、MCP env 主密钥加密、三把服务端密钥文件 <code>chmod 600</code> 且全部进 <code>.gitignore</code>。</li>
+        <li><span class="new">[新增]</span> <strong>集成部署方案</strong>：<code>deploy/</code> 目录沉淀 Nginx + systemd + 本地/服务器幂等一键脚本 + 阿里云 SOP。</li>
+      </ul>
+
+      <h3>量化效果</h3>
+      <div class="grid">
+        <div class="stat"><div class="label">新增追踪依赖</div><div class="value" style="color:var(--green)">2<span style="font-size:12px;color:var(--muted);margin-left:6px">langsmith + python-dotenv</span></div></div>
+        <div class="stat"><div class="label">新增安全依赖</div><div class="value" style="color:var(--green)">2<span style="font-size:12px;color:var(--muted);margin-left:6px">cryptography + PyJWT</span></div></div>
+        <div class="stat"><div class="label">新增安全/认证包</div><div class="value" style="color:var(--green)">2<span style="font-size:12px;color:var(--muted);margin-left:6px">security + auth</span></div></div>
+        <div class="stat"><div class="label">服务端密钥文件</div><div class="value" style="color:var(--green)">3<span style="font-size:12px;color:var(--muted);margin-left:6px">.app_secret / .app_master_key / .app_auth_key</span></div></div>
+        <div class="stat"><div class="label">新增 API 路由</div><div class="value" style="color:var(--green)">2<span style="font-size:12px;color:var(--muted);margin-left:6px">auth / settings</span></div></div>
+        <div class="stat"><div class="label">部署脚本文件</div><div class="value" style="color:var(--green)">5<span style="font-size:12px;color:var(--muted);margin-left:6px">SOP / 双端脚本 / nginx / systemd</span></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="num">1</span>LangSmith 追踪配置</h2>
+      <p>V1.4.0 的 Agent 执行过程是「黑盒」：LLM 输入了什么、调用了哪些工具、每步耗时多少，只能在服务端日志里翻。V1.5.0 接入 LangSmith，利用 LangGraph 原生集成的特性做到<strong>零埋点</strong>——只要配置环境变量，agent 执行、LLM 调用、工具调用就会自动上报，无需在业务代码里加任何 trace 代码。</p>
+
+      <h3>1.1 配置方式：纯环境变量</h3>
+      <pre><code># .env（复制 .env.example 后填写）
+# 在 https://smith.langchain.com 创建 API Key
+LANGSMITH_API_KEY=lsv2_pt_your_api_key_here
+LANGSMITH_TRACING=true
+# 追踪写入的项目名（可选，默认用应用名 OpenUnknown）
+# LANGSMITH_PROJECT=OpenUnknown
+# 自托管 LangSmith 才需要接入地址，SaaS 云端无需设置
+# LANGSMITH_ENDPOINT=http://your-langsmith-host:1984</code></pre>
+      <table>
+        <thead><tr><th>变量</th><th>必填</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code>LANGSMITH_API_KEY</code></td><td>是</td><td>LangSmith API Key（<code>lsv2_pt_...</code>）</td></tr>
+          <tr><td><code>LANGSMITH_TRACING</code></td><td>是</td><td>设为 <code>true</code> 才自动上报</td></tr>
+          <tr><td><code>LANGSMITH_PROJECT</code></td><td>否</td><td>项目名，缺省用应用名 <code>OpenUnknown</code></td></tr>
+          <tr><td><code>LANGSMITH_ENDPOINT</code></td><td>否</td><td>自托管接入地址，SaaS 不需要</td></tr>
+        </tbody>
+      </table>
+
+      <h3>1.2 关键：.env 必须尽早加载</h3>
+      <p>LangSmith 依赖 <code>LANGCHAIN_*</code> / <code>LANGSMITH_*</code> 环境变量在 <b>第三方库 import 时生效</b>。而 <code>dashscope</code> 在 import 时会固化 <code>api_key</code>，因此 <code>load_dotenv</code> 必须放在任何会读环境变量的 import 之前。V1.5.0 在 <code>backend/config.py</code> 顶部统一加载，并给项目名一个兜底默认值。</p>
+      <pre><code># backend/config.py —— 必须在 import dashscope 等库之前执行
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
+
+# 未显式指定项目名时，默认用应用名，便于控制台区分
+if not os.getenv("LANGSMITH_PROJECT") and not os.getenv("LANGCHAIN_PROJECT"):
+    os.environ["LANGSMITH_PROJECT"] = APP_NAME</code></pre>
+      <div class="note"><strong>踩坑记录</strong>：<code>.env</code> 在 <code>backend/</code> 的上一级（项目根目录），而非 backend 目录内；若加载晚于 <code>dashscope</code> 的 import，环境变量对已被固化的库无效。</div>
+
+      <h3>1.3 上报链路</h3>
+      <pre class="mermaid">
+flowchart TD
+    A["前端 /api/chat 请求"] --> B["stream_answer 组装 config"]
+    B --> C["graph.astream(inputs, config)"]
+    C --> D["LangGraph 执行节点"]
+    D --> E["chat 节点 → LLM 调用"]
+    D --> F["tools 节点 → 工具调用"]
+    E --> G["LangSmith 自动上报 trace"]
+    F --> G
+    B --> G
+    G --> H["控制台：项目 OpenUnknown 下可检索"]
+      </pre>
+
+      <h3>1.4 附加 tags 与 metadata</h3>
+      <p>光有 trace 不够，还得能在控制台按「谁 / 哪个模型 / 哪种模式」过滤。每次请求在 <code>RunnableConfig</code> 上附带 tags 与 metadata，LangSmith 自动把它们挂到该请求产生的整条 trace 上。</p>
+      <pre><code># backend/api/streaming.py
+config = {
+    "configurable": { "thread_id": ..., "model": model, "mode": mode, ... },
+    # tags 便于过滤；metadata 便于按字段检索
+    "tags": ["openunknown", f"user:{user_id}", f"model:{model}", f"mode:{mode}"],
+    "metadata": {
+        "session_id": session_id,
+        "user_id": user_id,
+        "user": username,
+        "model": model,
+        "mode": mode,
+    },
+}</code></pre>
+      <div class="success"><strong>效果</strong>：一次对话的完整链路（提示词、模型输出、工具调用、token 用量、耗时）都在 LangSmith 面板可见，排障从「翻本地日志」升级为「按 user / model / mode 检索 trace」。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">2</span>密钥治理：ignore 与加密双层防线</h2>
+      <p>V1.4.0 之前，模型 ApiKey 靠环境变量 / 本地文件兜底，MCP 的 <code>env</code> 里还躺着明文令牌，仓库公开后等于裸奔。V1.5.0 把密钥治理拆成两条线：<strong>「不该进库的一律 ignore」（.gitignore），「必须存下来的一律加密」（信封加密 + 服务端主密钥）</strong>，并顺带引入登录与多用户隔离，让密钥归属到具体用户。</p>
+
+      <h3>2.1 .gitignore：从源头挡住敏感文件</h3>
+      <pre><code># 环境变量（模板可提交，真实值不进库）
+.env
+.env.*
+!.env.example
+
+# 服务端密钥（JWT 签名 / 信封加密主密钥 / 密码传输私钥）
+data/.app_secret
+data/.app_master_key
+data/.app_auth_key
+
+# 私钥 / 证书（仓库是公开的，绝不能入库）
+deploy/*.key
+deploy/*.pem
+
+# 数据库（含用户数据与加密 ApiKey，不入库）
+data/openunknown.db
+data/openunknown.db-shm
+data/openunknown.db-wal
+
+# 打包产物
+*.tar.gz</code></pre>
+
+      <h3>2.2 三把服务端密钥：自动生成 + chmod 600</h3>
+      <p>服务端运行需要三把密钥，全部<strong>首次使用时自动生成、落到 <code>data/</code> 下并 <code>chmod 600</code></strong>，永不进 git、永不出服务端进程边界。</p>
+      <table>
+        <thead><tr><th>文件</th><th>用途</th><th>丢了会怎样</th></tr></thead>
+        <tbody>
+          <tr><td><code>data/.app_secret</code></td><td>JWT 会话签名密钥（HS256）</td><td>全员需重新登录</td></tr>
+          <tr><td><code>data/.app_master_key</code></td><td>信封加密主密钥（Fernet）</td><td>ApiKey / MCP env 解不开，需重填</td></tr>
+          <tr><td><code>data/.app_auth_key</code></td><td>登录密码 RSA 私钥（2048 位）</td><td>需重新生成，影响登录解密</td></tr>
+        </tbody>
+      </table>
+
+      <h3>2.3 登录密码：传输加密 + 落库散列</h3>
+      <p>密码在<strong>传输层用 RSA-OAEP-SHA256 加密</strong>，在<strong>存储层用 PBKDF2-SHA256 散列</strong>——请求体、日志、抓包里都不出现明文，落库也只有散列值。前端提交前先拿一次性 nonce + 公钥，防重放。</p>
+      <pre class="mermaid">
+flowchart TD
+    A["前端 GET /api/auth/challenge"] --> B["下发 RSA 公钥 + 一次性 nonce"]
+    B --> C["前端 RSA-OAEP-SHA256 加密密码"]
+    C --> D["POST /login 或 /register（无明文密码）"]
+    D --> E["服务端 consume_nonce 校验防重放"]
+    E --> F["私钥解密 → PBKDF2 散列校验"]
+    F --> G["签发 JWT（7 天有效）"]
+      </pre>
+      <pre><code># backend/security/challenge.py —— nonce 一次性 + 有效期 + 内存上限
+_NONCE_TTL_SECONDS = 300        # nonce 5 分钟过期
+_MAX_NONCES = 10_000            # 防恶意刷 challenge 撑爆内存
+
+# backend/security/crypto.py —— 密码只存 PBKDF2-SHA256 散列
+dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 200_000)</code></pre>
+
+      <h3>2.4 ApiKey：信封加密，明文永不落库</h3>
+      <p>模型服务 ApiKey 不再走环境变量 / 本地文件兜底，而是登录后在「模型设置」填写，<strong>加密落库、立即生效、不回显明文</strong>。加密采用<strong>信封加密（Envelope Encryption）</strong>：每个用户一把随机 DEK 加密 ApiKey，DEK 本身再用服务端主密钥包裹——这样主密钥泄露也不会直接暴露 ApiKey，且服务重启后 DEK 可从磁盘恢复，<strong>无需重新登录</strong>。</p>
+      <pre class="mermaid">
+flowchart TD
+    subgraph DB["SQLite 落库"]
+        A["user_api_keys.ciphertext = Fernet(apiKey, DEK)"]
+        B["users.dek_ciphertext = Fernet(DEK, master_key)"]
+    end
+    subgraph DISK["磁盘密钥"]
+        M["data/.app_master_key（chmod 600）"]
+    end
+    DEK["每用户随机 DEK（Fernet 密钥）"] --> A
+    DEK --> B
+    M --> B
+      </pre>
+      <pre><code># backend/auth/service.py —— 信封加密核心
+def save_api_key(user_id, platform, api_key):
+    dek = _ensure_user_dek(user_id)               # 每用户 DEK
+    ciphertext = crypto.encrypt_apikey(api_key.strip(), dek)   # ApiKey 用 DEK 加密
+    user_store.set_user_api_key(user_id, platform, ciphertext)
+
+def resolve_api_key(user_id, platform):
+    ciphertext = user_store.get_user_api_key_cipher(user_id, platform)
+    dek = _ensure_user_dek(user_id)               # DEK 由主密钥解出，重启可恢复
+    return crypto.decrypt_apikey(ciphertext, dek)</code></pre>
+
+      <h3>2.5 MCP env：敏感令牌主密钥加密</h3>
+      <p>MCP Server 的 <code>env</code> 可能含访问令牌，落库前用服务端主密钥整体加密，读取时解密；对历史明文 JSON 做了幂等迁移与读取兼容。</p>
+      <pre><code># backend/store/mcp.py
+def _encrypt_env(env: dict) -> str:
+    return encrypt_secret(json.dumps(env))      # 用主密钥加密整个 env
+
+# backend/store/db.py —— 迁移：把历史明文 env 一次性加密
+if env.startswith("{"):
+    UPDATE mcp_servers SET env = encrypt_secret(env) WHERE id = ?</code></pre>
+      <div class="note"><strong>安全边界</strong>：登录密码的 RSA 传输加密保证「请求体 / 日志 / 抓包不含明文」，但无法抵御已完全控制浏览器本地的攻击者（密码加密前本就以明文存在于输入框）；传输层安全仍依赖 HTTPS（TLS）。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">3</span>集成部署方案</h2>
+      <p>V1.4.0 只有本地 <code>uvicorn</code> 一条路。V1.5.0 沉淀出<strong>「子域名」部署方案 C</strong>：主域名首页放 OSS，聊天应用放在 ECS 的子域名 <code>chat.&lt;域名&gt;</code> 上，前端由 FastAPI 直接托管（无单独前端部署），数据库用 SQLite（不需要 MySQL/Redis），模型 ApiKey 由用户界面填写、加密落库、不进环境变量。</p>
+
+      <h3>3.1 部署架构</h3>
+      <pre class="mermaid">
+flowchart TD
+    U["用户浏览器"] --> O["https://域名/（OSS 静态首页）"]
+    U --> N["https://chat.域名/（ECS）"]
+    N --> P["Nginx :443（SSL 终止）"]
+    P --> V["uvicorn :8000（FastAPI）"]
+    V --> D["data/（SQLite + 三把密钥 + RAG 索引）"]
+      </pre>
+
+      <h3>3.2 deploy/ 目录结构</h3>
+      <pre><code>deploy/
+├── DEPLOY_ALIYUN.md        # 阿里云部署 SOP（架构总览/前置条件/手动分步/运维）
+├── deploy_local.sh         # 本地一键：打包 → 上传 → 远程执行（Mac 上跑）
+├── deploy.sh               # 服务器端幂等安装（root 跑，可重复用于更新）
+├── nginx-openunknown.conf  # Nginx 站点模板（占位 chat.your-domain.com）
+└── openunknown.service     # systemd 服务单元</code></pre>
+
+      <h3>3.3 一键部署流程</h3>
+      <div class="flow">
+        <span class="step">本地 rsync 打包（排除 .venv/.git/.env/data）</span><span class="arrow">→</span>
+        <span class="step">tar → scp 上传代码包</span><span class="arrow">→</span>
+        <span class="step">SSH 执行 deploy.sh</span><span class="arrow">→</span>
+        <span class="step">装依赖 + 建 venv</span><span class="arrow">→</span>
+        <span class="step">装 systemd + Nginx</span><span class="arrow">→</span>
+        <span class="step">自检 curl 响应</span>
+      </div>
+      <pre><code># 本地一键部署（首次带数据迁移）
+./deploy/deploy_local.sh --with-data     # 连 SQLite 备份 + 密钥一起迁移
+# 后续更新代码（不覆盖服务器数据库/密钥）
+./deploy/deploy_local.sh</code></pre>
+      <p>首次迁移用 <code>sqlite3 ".backup"</code> 做一致性备份（不能直接 <code>cp</code> 单文件），并连同 <code>.app_secret</code> / <code>.app_master_key</code> / RAG 索引一起打包；<code>deploy.sh</code> 只在服务器还没有数据库时才恢复数据包，保证后续更新不覆盖线上数据。</p>
+
+      <h3>3.4 systemd 服务硬化</h3>
+      <pre><code># deploy/openunknown.service —— 非 root 运行 + 最小权限
+[Service]
+User=openunknown
+Group=openunknown
+ExecStart=/opt/openunknown/.venv/bin/uvicorn backend.main:app \
+  --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true</code></pre>
+
+      <h3>3.5 Nginx：SSE 流式必须关缓冲</h3>
+      <p>聊天是 SSE 流式返回，Nginx 默认会缓冲响应，导致「卡到最后才一起返回」。模板里两处关键配置缺一不可。</p>
+      <pre><code># deploy/nginx-openunknown.conf
+location / {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_buffering off;       # 关键：SSE 流式必须关缓冲
+    proxy_cache     off;
+    proxy_read_timeout  300s;  # 思考模式长响应不能提前断开
+}</code></pre>
+      <div class="note"><strong>踩坑记录</strong>：<code>proxy_buffering off</code> 漏配，流式会卡到最后才返回；SELinux Enforcing 下访问 502 需执行 <code>setsebool -P httpd_can_network_connect 1</code>；国内 ECS 装依赖建议走阿里云 pip 镜像。</div>
+
+      <h3>3.6 备份清单</h3>
+      <p>线上数据就四样，备份必须带上前三样，私钥绝不出服务器：</p>
+      <ul>
+        <li><code>data/openunknown.db</code> —— 用户 / 会话 / ApiKey 密文 / 聊天记忆</li>
+        <li><code>data/.app_secret</code> + <code>data/.app_master_key</code> —— 丢了要全员重登 / ApiKey 重填</li>
+        <li><code>data/hotels/</code> —— RAG 索引，可重建</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">4</span>目录结构变更</h2>
+      <pre><code>backend/
+├── main.py               # 【改】注册 auth / settings 两个新路由
+├── config.py             # 【改】load_dotenv + LangSmith 项目名 + PLATFORMS
+├── api/
+│   ├── schemas.py        # 【改】新增 登录/注册/ApiKey 请求体模型
+│   ├── streaming.py      # 【改】按用户解析 ApiKey + 注入 LangSmith tags/metadata
+│   └── routers/
+│       ├── auth.py       # 【新增】challenge / register / login / me / logout
+│       ├── settings.py   # 【新增】ApiKey 查询/保存/清除/连通性测试
+│       ├── chat.py
+│       ├── sessions.py   # 【改】会话按用户隔离
+│       └── mcp.py        # 【改】MCP 配置按用户隔离 + env 加密
+├── agent/
+│   ├── graph.py          # 【改】按 user_id 取工具 + api_key 透传
+│   ├── llm.py            # 【改】get_llm 增加 api_key/base_url 参数 + 缓存失效
+│   ├── prompts.py
+│   └── tools/...
+├── auth/                 # 【新增】认证与 ApiKey 信封加密
+│   ├── service.py        # 用户 ApiKey 加密存取（信封加密）
+│   ├── tokens.py         # JWT 签发/校验（7 天有效）
+│   └── deps.py           # FastAPI 依赖：解析当前登录用户
+├── security/             # 【新增】安全原语
+│   ├── crypto.py         # PBKDF2 密码散列 + Fernet ApiKey 加解密
+│   ├── master_key.py     # 服务端主密钥（自动生成 + chmod 600）
+│   └── challenge.py      # RSA-OAEP 密码传输加密 + 一次性 nonce
+├── store/                # 【新增】持久化层
+│   ├── db.py             # 单例连接 + 建表 + 幂等迁移
+│   ├── users.py          # 用户 + ApiKey 密文
+│   ├── sessions.py       # 会话（按用户隔离，thread_id 加 user 命名空间）
+│   └── mcp.py            # MCP（env 主密钥加密）
+└── rag/...               # RAG 检索包（无变化）
+deploy/                   # 【新增】集成部署
+├── DEPLOY_ALIYUN.md      # 阿里云部署 SOP
+├── deploy_local.sh       # 本地一键部署脚本
+├── deploy.sh             # 服务器端幂等安装脚本
+├── nginx-openunknown.conf# Nginx 站点模板
+└── openunknown.service   # systemd 服务单元</code></pre>
+    </section>
+
+    <section>
+      <h2><span class="num">5</span>关键设计决策</h2>
+      <ul>
+        <li><strong>LangSmith 零埋点，把元信息挂在 config 上</strong>：不侵入 agent 图代码，只在 <code>stream_answer</code> 组装 <code>RunnableConfig</code> 时带上 tags/metadata，靠 LangGraph 原生集成自动上报，埋点成本趋近于零。</li>
+        <li><strong>load_dotenv 必须抢在第三方 import 前</strong>：<code>dashscope</code> import 时会固化 api_key，LangSmith 依赖 import 时读取环境变量，因此统一在 <code>config.py</code> 顶部加载 <code>.env</code>，一个入口避免顺序踩坑。</li>
+        <li><strong>密钥治理「ignore 优先，加密兜底」</strong>：能不入库的先靠 <code>.gitignore</code> 挡住（<code>.env</code>、密钥文件、私钥、数据库）；必须持久化的再加密（ApiKey 信封加密、MCP env 主密钥加密），两条防线各管一段。</li>
+        <li><strong>ApiKey 信封加密而非单层加密</strong>：每用户随机 DEK 加密 ApiKey，DEK 用主密钥包裹。主密钥与 DEK 分层，主密钥泄露不直接暴露 ApiKey，且 DEK 落库后重启可恢复，免去「换 key 重登」。</li>
+        <li><strong>密码「传输加密 + 落库散列」双重保护</strong>：传输层 RSA-OAEP 加密 + 一次性 nonce 防重放，存储层 PBKDF2-SHA256（20 万次迭代）散列；明文只在浏览器输入框与服务端解密瞬间短暂存在。</li>
+        <li><strong>多用户隔离用「thread_id 命名空间」</strong>：checkpoint 的 thread_id 用 <code>{user_id}:{session_id}</code>，会话 / MCP / ApiKey 全部挂 user_id，即使会话 id 相同也不串数据。</li>
+        <li><strong>ApiKey 无兜底、随用户配置</strong>：模型服务 ApiKey 不再走环境变量 / 本地文件兜底，登录后界面填写、加密落库、立即生效；未配置的用户在界面被拦截，后端也直接返回错误事件。</li>
+        <li><strong>部署脚本「本地打包 + 服务器幂等」两段式</strong>：本地 <code>deploy_local.sh</code> 负责打包上传（rsync 排除敏感目录），服务器 <code>deploy.sh</code> 负责安装且幂等可重复执行，更新与首次迁移（<code>--with-data</code>）分离。</li>
+        <li><strong>首次迁移用 SQLite 一致性备份</strong>：<code>sqlite3 ".backup"</code> 而非直接 <code>cp</code> 单文件，避免 WAL 模式下拷出不一致的库；<code>deploy.sh</code> 只在服务器无库时才恢复数据包。</li>
+        <li><strong>systemd 服务最小权限硬化</strong>：<code>NoNewPrivileges=true</code> + <code>PrivateTmp=true</code> + 专用非登录用户，uvicorn 只监听 127.0.0.1，由 Nginx 做 TLS 终止与反向代理。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">6</span>待优化清单</h2>
+      <div class="todo">
+        <strong>问题 1：LangSmith 上报的敏感字段未脱敏</strong><br/>
+        trace 里会完整记录提示词与模型输出，若用户输入或 MCP 工具返回夹带敏感信息（如某个工具误回显 token），会原样进 LangSmith。<br/>
+        优化方向：对工具输出 / 消息内容做敏感字段扫描与脱敏后再上报，或对特定字段配置 redact 规则。
+      </div>
+      <div class="todo">
+        <strong>问题 2：JWT 无状态退出，服务端无法吊销</strong><br/>
+        <code>/api/auth/logout</code> 只是让客户端删 token，服务端不维护会话状态，token 被盗后 7 天内仍有效。<br/>
+        优化方向：引入 token 黑名单 / 短时 access + refresh 双令牌，或把签发时间戳纳入校验做强制下线。
+      </div>
+      <div class="todo">
+        <strong>问题 3：主密钥是「单点」</strong><br/>
+        <code>.app_master_key</code> 丢了 ApiKey / MCP env 全部解不开，且它本身是明文文件，仅靠 <code>chmod 600</code> 与文件系统权限保护。<br/>
+        优化方向：接入 KMS / 密钥托管，或对主密钥做硬件加密与定期轮换（re-encrypt）。
+      </div>
+      <div class="todo">
+        <strong>问题 4：部署仅覆盖阿里云 dnf 系单机</strong><br/>
+        <code>deploy.sh</code> 虽做了 dnf/apt 分支，但尚未覆盖 Docker / 多实例 / 负载均衡场景，SQLite 单机也无法横向扩容。<br/>
+        优化方向：出 Docker Compose 编排与容器镜像，数据库按需迁移到 PostgreSQL 以支持多实例。
+      </div>
+      <div class="todo">
+        <strong>问题 5：ApiKey 仅支持单平台</strong><br/>
+        数据结构已为多平台预留（<code>PLATFORMS</code> / <code>user_api_keys(user_id, platform)</code>），但当前仅百炼一个平台可用。<br/>
+        优化方向：补齐前端平台选择器与多平台切换，让 ApiKey 按平台分表生效。
+      </div>
+    </section>
+
+    <footer>
+      OpenUnknown 架构文档 · V1.5.0 · 2026-08-27 · LangSmith 追踪 · 密钥加密 · 集成部署
+    </footer>
+  </div>
+</body>
+</html>

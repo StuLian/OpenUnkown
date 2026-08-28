@@ -7,6 +7,34 @@
   未配置 ApiKey 的用户**无法使用对话功能**（无任何兜底）。
 - ApiKey **加密存储**（Fernet 信封加密），明文不落库、不回显。
 
+## 前端（React + TypeScript + Vite）
+
+前端源码位于 `frontend/`，构建产物 `frontend/dist/` 由 FastAPI 直接托管，
+服务器无需安装 Node。`dist/` **不入库**，由 `deploy/deploy_local.sh` 在本地构建后随部署包上传。
+
+### 一键启动开发环境（推荐）
+
+```bash
+./dev.sh
+```
+
+同时拉起后端 `uvicorn --reload`（`127.0.0.1:8000`）与前端 Vite HMR（`http://localhost:5173`，
+`/api` 自动代理到后端），浏览器访问 `http://localhost:5173`。改 Python 代码后端自动重载、
+改 React 代码前端即时热更新；首次运行自动创建 `.venv` 并安装前后端依赖，`Ctrl+C` 一键全停。
+
+### 手动分步
+
+```bash
+cd frontend
+npm install                 # 首次
+npm run build               # 构建到 frontend/dist（本地跑 uvicorn 前需先构建）
+npm run dev                 # 仅前端（/api 代理到 127.0.0.1:8000，热更新）
+npm run typecheck           # 类型检查
+```
+
+> 本地直接 `uvicorn backend.main:app` 前，需先执行 `npm run build` 生成 `frontend/dist/`；
+> 线上部署则由 `deploy/deploy_local.sh` 自动完成前端构建。
+
 ## 接入 LangSmith 追踪
 
 本项目基于 LangGraph，接入 LangSmith **无需任何埋点代码**——只要配置好环境变量，

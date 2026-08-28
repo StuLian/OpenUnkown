@@ -41,16 +41,25 @@ CERT_KEY_PATH="$(resolve "$CERT_KEY")"
 SSH=(ssh -o StrictHostKeyChecking=accept-new -i "$KEY" "root@$HOST")
 SCP=(scp -o StrictHostKeyChecking=accept-new -i "$KEY")
 
-# ---- 1. 打包代码（排除 .venv/.git/.env/data）----
+# ---- 1. 构建前端 React 产物（dist 不入库，部署时在本地构建后随包上传）----
+log "构建前端 React 产物..."
+command -v npm >/dev/null 2>&1 || die "未找到 npm，请先安装 Node.js（https://nodejs.org）"
+(
+  cd "$ROOT/frontend"
+  npm install --no-audit --no-fund
+  npm run build
+)
+
+# ---- 2. 打包代码（排除 .venv/.git/.env/data/node_modules）----
 log "打包代码..."
 STAGE="$(mktemp -d)"
 rsync -a --exclude '.venv' --exclude '.git' --exclude '__pycache__' \
-  --exclude '.env' --exclude 'data' \
+  --exclude '.env' --exclude 'data' --exclude 'node_modules' \
   "$ROOT/" "$STAGE/"
 tar --no-xattrs -czf /tmp/openunknown-code.tar.gz -C "$STAGE" .
 rm -rf "$STAGE"
 
-# ---- 2. 可选：打包数据（首次迁移）----
+# ---- 3. 可选：打包数据（首次迁移）----
 if [[ "$WITH_DATA" == "1" ]]; then
   log "打包数据（SQLite 一致性备份 + 密钥 + 索引）..."
   DSTAGE="$(mktemp -d)"
@@ -62,7 +71,7 @@ if [[ "$WITH_DATA" == "1" ]]; then
   rm -rf "$DSTAGE"
 fi
 
-# ---- 3. 上传 ----
+# ---- 4. 上传 ----
 log "上传代码包..."
 "${SCP[@]}" /tmp/openunknown-code.tar.gz "root@$HOST:/tmp/"
 if [[ "$WITH_DATA" == "1" ]]; then
@@ -73,7 +82,7 @@ log "上传证书..."
 "${SCP[@]}" "$CERT_PEM_PATH" "root@$HOST:/tmp/chat_fullchain.pem"
 "${SCP[@]}" "$CERT_KEY_PATH" "root@$HOST:/tmp/chat_privkey.pem"
 
-# ---- 4. 远程执行 ----
+# ---- 5. 远程执行 ----
 log "远程部署中..."
 "${SSH[@]}" "DOMAIN='$DOMAIN' bash -s" <<'REMOTE'
 set -e

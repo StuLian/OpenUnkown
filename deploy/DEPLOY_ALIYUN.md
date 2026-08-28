@@ -16,7 +16,8 @@
                                           └─ data/（SQLite + 密钥 + RAG 索引）
 ```
 
-- 前端由 FastAPI 直接托管（`/`、`/static`、`/api`），**无单独前端部署**
+- 前端为 React（源码 `frontend/`），`dist/` 不入库，由 `deploy/deploy_local.sh` 在**本地构建**后随部署包上传，
+  由 FastAPI 直接托管（`/`、`/assets`、`/api`），**服务器无需装 Node、无单独前端部署**
 - 数据库是 SQLite（`data/openunknown.db`），**不需要 MySQL/Redis**
 - 模型 ApiKey 由用户在 Web「模型设置」填写，加密落库，**不进环境变量**
 
