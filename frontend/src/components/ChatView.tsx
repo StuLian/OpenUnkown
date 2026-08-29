@@ -1,14 +1,8 @@
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api/client";
 import { fetchSessionMessages } from "../api/endpoints";
 import { readSseStream } from "../lib/sse";
+import Markdown from "./Markdown";
 import type { ModeOption, Usage } from "../types";
 
 interface ToolCall {
@@ -278,12 +272,13 @@ export default function ChatView({
     if (el) el.scrollTop = el.scrollHeight;
   }, [chat.messages]);
 
-  function autoGrow() {
+  // 输入内容变化时自适应高度；发送后内容清空时，随 state 一起还原为单行高度。
+  useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 180) + "px";
-  }
+  }, [chat.input]);
 
   return (
     <>
@@ -319,10 +314,7 @@ export default function ChatView({
             placeholder="输入消息，Enter 发送，Shift+Enter 换行"
             value={chat.input}
             disabled={!hasApiKey}
-            onChange={(e) => {
-              chat.setInput(e.target.value);
-              autoGrow();
-            }}
+            onChange={(e) => chat.setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key !== "Enter" || e.shiftKey) return;
               // 中文/日文等输入法组词确认时的回车（isComposing / keyCode 229）不应触发发送
@@ -346,47 +338,6 @@ export default function ChatView({
       </footer>
     </>
   );
-}
-
-// 把正文里的 Markdown 图片 ![](url) 渲染成 <img>，其余文本保持纯文本（保留换行）。
-function renderMessageContent(content: string): ReactNode {
-  const nodes: ReactNode[] = [];
-  const regex = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
-  let lastIndex = 0;
-  let key = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      nodes.push(
-        <Fragment key={`t${key++}`}>
-          {content.slice(lastIndex, match.index)}
-        </Fragment>
-      );
-    }
-    nodes.push(
-      <a
-        key={`img${key++}`}
-        href={match[2]}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="msg-img-link"
-      >
-        <img
-          src={match[2]}
-          alt={match[1] || "图片"}
-          className="msg-img"
-          loading="lazy"
-        />
-      </a>
-    );
-    lastIndex = regex.lastIndex;
-  }
-
-  if (lastIndex < content.length) {
-    nodes.push(<Fragment key={`t${key++}`}>{content.slice(lastIndex)}</Fragment>);
-  }
-  return nodes;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -459,7 +410,9 @@ function MessageRow({ message }: { message: Message }) {
       <div className="msg user">
         <div className="avatar">我</div>
         <div className="msg-body">
-          <div className="bubble">{renderMessageContent(message.content)}</div>
+          <div className="bubble">
+            <Markdown content={message.content} autoImageLinks={false} />
+          </div>
           <CopyButton text={message.content} />
         </div>
       </div>
@@ -513,7 +466,7 @@ function MessageRow({ message }: { message: Message }) {
               (message.streaming ? " cursor-blink" : "")
             }
           >
-            {renderMessageContent(message.content)}
+            <Markdown content={message.content} />
           </div>
           {message.meta ? (
             <div className={"meta" + (message.stopped ? " stopped" : "")}>
