@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+} from "react";
 import { apiFetch } from "../api/client";
 import {
+  attachUrl,
   fetchFileLimits,
   fetchSessionMessages,
   uploadFile,
@@ -22,6 +29,7 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  images?: string[];
   error?: boolean;
   stopped?: boolean;
   meta?: string;
@@ -45,6 +53,22 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// 剪贴板/拖拽的 MIME → 扩展名（图片 + 文档），用于合成上传文件名
+function extFromMime(mime: string): string | null {
+  const m = mime.toLowerCase();
+  if (m.includes("png")) return "png";
+  if (m.includes("webp")) return "webp";
+  if (m.includes("gif")) return "gif";
+  if (m.includes("jpeg") || m.includes("jpg")) return "jpg";
+  if (m.includes("pdf")) return "pdf";
+  if (m.includes("csv")) return "csv";
+  if (m.includes("spreadsheetml") || m.includes("excel")) return "xlsx";
+  if (m.includes("wordprocessingml") || m.includes("word")) return "docx";
+  if (m.includes("markdown")) return "md";
+  if (m.includes("text/plain")) return "txt";
+  return null;
 }
 
 function buildMeta(
@@ -108,6 +132,7 @@ function useChat({
               id: uid("hist"),
               role: m.role,
               content: m.content,
+              images: m.images,
             };
             if (m.role === "assistant" && m.usage) {
               msg.meta =
@@ -141,14 +166,23 @@ function useChat({
         for (const f of list) {
           // 本地预校验：扩展名 + 大小（后端仍会兜底校验）
           const ext = (f.name.split(".").pop() || "").toLowerCase();
-          if (limits && !limits.extensions.includes(ext)) {
+          const isImage = limits?.image_extensions.includes(ext) ?? false;
+          const allowedExts = limits
+            ? [...limits.extensions, ...limits.image_extensions]
+            : [];
+          const maxSize = limits
+            ? isImage
+              ? limits.max_image_size
+              : limits.max_file_size
+            : Infinity;
+          if (limits && !allowedExts.includes(ext)) {
             throw new Error(
-              `不支持的文件类型 .${ext || "?"}，仅支持 ${limits.extensions.join("/")}`
+              `不支持的文件类型 .${ext || "?"}，仅支持 ${allowedExts.join("/")}`
             );
           }
-          if (limits && f.size > limits.max_file_size) {
+          if (f.size > maxSize) {
             throw new Error(
-              `文件过大（${formatSize(f.size)}），上限 ${formatSize(limits.max_file_size)}`
+              `文件过大（${formatSize(f.size)}），上限 ${formatSize(maxSize)}`
             );
           }
           const att = await uploadFile(f);
@@ -163,6 +197,20 @@ function useChat({
     [limits]
   );
 
+  // 粘贴链接：下载并解析，结果挂到附件列表。
+  const attachUrlRequest = useCallback(async (url: string) => {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const att = await attachUrl(url);
+      setAttachments((prev) => [...prev, { ...att, id: uid("att") }]);
+    } catch (e) {
+      setUploadError((e as Error).message || "链接解析失败");
+    } finally {
+      setUploading(false);
+    }
+  }, []);
+
   const removeAttachment = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
@@ -175,15 +223,20 @@ function useChat({
     // 发送前捕获当前附件并清空，避免发送过程中再次追加导致状态不一致
     const attachmentsToSend = attachments.map((a) => ({
       filename: a.filename,
-      content: a.content,
+      file_type: a.file_type,
+      content: a.file_type === "image" ? a.ocr_text ?? "" : a.content ?? "",
+      image: a.file_type === "image" ? a.image ?? null : null,
     }));
+    const imageUrls = attachments
+      .filter((a) => a.file_type === "image" && a.image)
+      .map((a) => a.image as string);
     setAttachments([]);
     setUploadError(null);
     const botId = uid("bot");
 
     setMessages((prev) => [
       ...prev,
-      { id: uid("user"), role: "user", content: text },
+      { id: uid("user"), role: "user", content: text, images: imageUrls },
       { id: botId, role: "assistant", content: "", streaming: true, toolCalls: [] },
     ]);
     setBusy(true);
@@ -199,6 +252,7 @@ function useChat({
     let stopped = false;
     let usedModel = model;
     let usedMode = mode;
+    let notice: string | null = null;
 
     const patch = (p: Partial<Message>) =>
       setMessages((prev) =>
@@ -242,6 +296,10 @@ function useChat({
         }
         if (ev.mode) {
           usedMode = ev.mode;
+          continue;
+        }
+        if (ev.notice) {
+          notice = ev.notice;
           continue;
         }
         if (ev.thinking) {
@@ -291,11 +349,16 @@ function useChat({
       }
     } finally {
       const modeName = modes.find((m) => m.id === usedMode)?.name ?? "";
+      const metaBase = buildMeta(usedModel, usedMode, usage, stopped, modeName);
       patch({
         streaming: false,
         thinkingStatus: stopped ? "stopped" : "done",
         stopped,
-        meta: buildMeta(usedModel, usedMode, usage, stopped, modeName),
+        meta: notice
+          ? metaBase
+            ? `⚠ ${notice} · ${metaBase}`
+            : `⚠ ${notice}`
+          : metaBase,
       });
       controllerRef.current = null;
       setBusy(false);
@@ -315,7 +378,9 @@ function useChat({
     attachments,
     uploading,
     uploadError,
+    setUploadError,
     attachFiles,
+    attachUrl: attachUrlRequest,
     removeAttachment,
     send,
     stop,
@@ -373,17 +438,47 @@ export default function ChatView({
     el.style.height = Math.min(el.scrollHeight, 180) + "px";
   }, [chat.input]);
 
-  const accept = (limits?.extensions ?? [
-    "txt",
-    "md",
-    "markdown",
-    "csv",
-    "pdf",
-    "docx",
-    "xlsx",
-  ])
+  const accept = [
+    ...(limits?.extensions ?? ["txt", "md", "markdown", "csv", "pdf", "docx", "xlsx"]),
+    ...(limits?.image_extensions ?? ["jpg", "jpeg", "png", "webp", "gif"]),
+  ]
     .map((e) => "." + e)
     .join(",");
+
+  // 粘贴：剪贴板里的图片/文件直接上传；整段纯链接自动下载上传。
+  function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const items = e.clipboardData?.items;
+    if (items) {
+      const files: File[] = [];
+      for (const item of Array.from(items)) {
+        if (item.kind !== "file") continue;
+        const blob = item.getAsFile();
+        if (!blob) continue;
+        const ext = extFromMime(item.type) || extFromMime(blob.type);
+        const name = blob.name || `pasted.${ext || "bin"}`;
+        files.push(new File([blob], name, { type: blob.type || item.type }));
+      }
+      if (files.length > 0) {
+        e.preventDefault();
+        void chat.attachFiles(files);
+        return;
+      }
+    }
+    const text = e.clipboardData?.getData("text") ?? "";
+    const trimmed = text.trim();
+    if (/^https?:\/\/\S+$/i.test(trimmed)) {
+      e.preventDefault();
+      void chat.attachUrl(trimmed);
+      return;
+    }
+    // 从系统文件管理器复制的文件往往只拿到 file:// 路径，浏览器无法读取其内容
+    if (/^file:\/\//i.test(trimmed)) {
+      e.preventDefault();
+      chat.setUploadError(
+        "浏览器无法读取本地文件路径，请直接把文件拖拽到输入框，或点击 📎 按钮选择"
+      );
+    }
+  }
 
   return (
     <>
@@ -394,7 +489,7 @@ export default function ChatView({
               <h2>你好，我是 OpenUnknown</h2>
               <div>
                 有什么想问的，尽管开始吧。支持天气查询、自定义 MCP 工具，
-                也可以上传文档/表格让我读内容作答。
+                也可以上传文档/表格/图片让我读内容作答。
               </div>
             </div>
           ) : (
@@ -412,27 +507,42 @@ export default function ChatView({
         </div>
       ) : null}
 
-      <footer>
+      <footer
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            void chat.attachFiles(e.dataTransfer.files);
+          }
+        }}
+      >
         {chat.attachments.length > 0 || chat.uploading || chat.uploadError ? (
           <div className="attach-row">
-            {chat.attachments.map((a) => (
-              <span
-                key={a.id}
-                className="attach-chip"
-                title={`${a.file_type} · ${formatSize(a.size)}`}
-              >
-                <span className="attach-icon">📎</span>
-                <span className="attach-name">{a.filename}</span>
-                <button
-                  className="attach-remove"
-                  title="移除"
-                  aria-label="移除附件"
-                  onClick={() => chat.removeAttachment(a.id)}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
+            {chat.attachments.map((a) => {
+              const isImage = a.file_type === "image" && !!a.image;
+              const title = isImage
+                ? `${a.filename} · ${a.width ?? "?"}×${a.height ?? "?"} · ${formatSize(a.size)} · 发送后提取文字并看图`
+                : `${a.file_type} · ${formatSize(a.size)}`;
+              return (
+                <span key={a.id} className="attach-chip" title={title}>
+                  {isImage ? (
+                    <img className="attach-thumb" src={a.image} alt="" />
+                  ) : (
+                    <span className="attach-icon">📎</span>
+                  )}
+                  <span className="attach-name">{a.filename}</span>
+                  {isImage ? <span className="attach-ocr">看图+文字</span> : null}
+                  <button
+                    className="attach-remove"
+                    title="移除"
+                    aria-label="移除附件"
+                    onClick={() => chat.removeAttachment(a.id)}
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
             {chat.uploading ? <span className="attach-status">解析中…</span> : null}
             {chat.uploadError ? (
               <span className="attach-error">{chat.uploadError}</span>
@@ -443,7 +553,7 @@ export default function ChatView({
         <div className="input-wrap">
           <button
             className="attach-btn"
-            title="上传附件（txt / md / csv / pdf / docx / xlsx）"
+            title="上传附件（文档/表格/图片）"
             aria-label="上传附件"
             disabled={chat.uploading}
             onClick={() => fileInputRef.current?.click()}
@@ -457,6 +567,7 @@ export default function ChatView({
             value={chat.input}
             disabled={!hasApiKey}
             onChange={(e) => chat.setInput(e.target.value)}
+            onPaste={handlePaste}
             onKeyDown={(e) => {
               if (e.key !== "Enter" || e.shiftKey) return;
               // 中文/日文等输入法组词确认时的回车（isComposing / keyCode 229）不应触发发送
@@ -492,7 +603,7 @@ export default function ChatView({
           }}
         />
 
-        <div className="hint">回车发送 · Shift + 回车换行 · 支持上传文档/表格作为附件</div>
+        <div className="hint">回车发送 · Shift + 回车换行 · 支持上传/拖拽/粘贴图片与文档</div>
       </footer>
     </>
   );
@@ -568,9 +679,24 @@ function MessageRow({ message }: { message: Message }) {
       <div className="msg user">
         <div className="avatar">我</div>
         <div className="msg-body">
-          <div className="bubble">
-            <Markdown content={message.content} autoImageLinks={false} />
-          </div>
+          {message.images && message.images.length > 0 ? (
+            <div className="msg-imgs">
+              {message.images.map((src, i) => (
+                <img
+                  key={i}
+                  src={src}
+                  alt=""
+                  className="msg-img-attach"
+                  loading="lazy"
+                />
+              ))}
+            </div>
+          ) : null}
+          {message.content ? (
+            <div className="bubble">
+              <Markdown content={message.content} autoImageLinks={false} />
+            </div>
+          ) : null}
           <CopyButton text={message.content} />
         </div>
       </div>

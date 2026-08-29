@@ -87,12 +87,54 @@ def _hit(text: str, kws: tuple[str, ...]) -> bool:
     return any(k in text for k in kws)
 
 
+def extract_text_content(content, mark_images: bool = True) -> str:
+    """从消息内容（str 或多模态块列表）提取纯文本。
+
+    多模态 HumanMessage 的 content 是 [{type:text,text:...}, {type:image_url,...}]
+    这样的块列表，直接 str() 会带出超长 base64，这里只保留文本部分。
+    mark_images=True 时图片块用「[图片]」占位（用于意图识别/日志/字数统计）；
+    用于界面回显时可传 False，避免和真正渲染出来的图片重复。
+    """
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    for block in content or []:
+        if not isinstance(block, dict):
+            parts.append(str(block))
+            continue
+        if block.get("type") == "text":
+            parts.append(str(block.get("text", "")))
+        elif block.get("type") == "image_url":
+            if mark_images:
+                parts.append("[图片]")
+        else:
+            parts.append(str(block))
+    return " ".join(parts)
+
+
+def extract_image_urls(content) -> list[str]:
+    """从多模态消息内容中提取所有图片 URL（data URL 或 http(s)）。"""
+    if isinstance(content, str):
+        return []
+    urls: list[str] = []
+    for block in content or []:
+        if not isinstance(block, dict) or block.get("type") != "image_url":
+            continue
+        image_url = block.get("image_url")
+        if isinstance(image_url, dict):
+            url = image_url.get("url", "")
+        else:
+            url = image_url
+        if isinstance(url, str) and url:
+            urls.append(url)
+    return urls
+
+
 def _latest_user_text(messages: list) -> str:
     """取最近一条用户消息文本，作为工具预筛的意图依据。"""
     for msg in reversed(messages):
         if getattr(msg, "type", None) == "human":
-            content = getattr(msg, "content", "")
-            return content if isinstance(content, str) else str(content)
+            return extract_text_content(getattr(msg, "content", ""))
     return ""
 
 
@@ -172,8 +214,7 @@ def _messages_chars(messages: list) -> int:
     """粗算消息文本总字数，便于日志对比压缩效果。"""
     total = 0
     for msg in messages:
-        content = getattr(msg, "content", "")
-        total += len(content) if isinstance(content, str) else len(str(content))
+        total += len(extract_text_content(getattr(msg, "content", "")))
     return total
 
 
@@ -205,7 +246,7 @@ def _log_llm_input(model_name: str, messages: list, tool_names: list[str]) -> No
     for i, msg in enumerate(messages):
         role = getattr(msg, "type", msg.__class__.__name__)
         name = getattr(msg, "name", None) or ""
-        content = msg.content if isinstance(getattr(msg, "content", None), str) else str(getattr(msg, "content", ""))
+        content = extract_text_content(getattr(msg, "content", ""))
         header = f"[{i}] {role}" + (f" ({name})" if name else "")
         lines.append(header)
         lines.append(content if content else "(空)")

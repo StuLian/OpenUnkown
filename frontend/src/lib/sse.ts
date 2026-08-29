@@ -5,6 +5,7 @@ export interface StreamEvent {
   error?: string;
   model?: string;
   mode?: string;
+  notice?: string;
   thinking?: string;
   delta?: string;
   tool_call?: { id: string; tool: string; args?: unknown };

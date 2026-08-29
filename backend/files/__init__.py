@@ -1,4 +1,12 @@
-"""文件上传解析包：把上传的常见文档/表格解析成纯文本，供对话附件使用。"""
+"""文件上传解析包：文档/表格解析为纯文本，图片校验编码与 OCR。"""
+from backend.files.image import (
+    IMAGE_EXTENSIONS,
+    MAX_IMAGE_SIZE,
+    ImageError,
+    ImageFile,
+    ocr_image,
+    process_image,
+)
 from backend.files.parser import (
     ALLOWED_EXTENSIONS,
     MAX_CONTENT_CHARS,
@@ -15,4 +23,10 @@ __all__ = [
     "ParseError",
     "ParsedFile",
     "parse_bytes",
+    "IMAGE_EXTENSIONS",
+    "MAX_IMAGE_SIZE",
+    "ImageError",
+    "ImageFile",
+    "process_image",
+    "ocr_image",
 ]

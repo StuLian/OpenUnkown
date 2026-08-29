@@ -16,6 +16,7 @@ export interface Session {
 export interface HistoryMessage {
   role: "user" | "assistant";
   content: string;
+  images?: string[];
   usage?: Usage;
 }
 
@@ -97,18 +98,28 @@ export interface Challenge {
 
 export interface FileLimits {
   extensions: string[];
+  image_extensions: string[];
   max_file_size: number;
+  max_image_size: number;
   max_content_chars: number;
 }
 
 export interface Attachment {
   id: string;
   filename: string;
-  file_type: string;
+  file_type: string; // 文档类型（txt/markdown/csv/pdf/docx/xlsx）或 "image"
   size: number;
-  content: string;
-  char_count: number;
-  truncated: boolean;
+  // 文本附件
+  content?: string;
+  char_count?: number;
+  truncated?: boolean;
+  // 图片附件
+  image?: string; // data URL
+  mime?: string;
+  width?: number;
+  height?: number;
+  ocr_text?: string | null;
+  ocr_error?: string | null;
 }
 
 export interface AuthResponse {

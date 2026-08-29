@@ -45,6 +45,11 @@ AVAILABLE_MODELS = [
 # 默认模型
 DEFAULT_MODEL = "qwen3.7-plus"
 
+# 视觉（多模态）模型：处理图片附件的 OCR 与看图。
+# 必须是当前平台（百炼 / DashScope 兼容接口）支持的多模态模型。
+# 若你的平台网关使用自定义模型 id，请改成对应的多模态模型名。
+VISION_MODEL = "qwen-vl-plus"
+
 # 兼容旧引用：默认模型名称
 MODEL_NAME = DEFAULT_MODEL
 

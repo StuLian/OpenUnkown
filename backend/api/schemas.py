@@ -5,10 +5,22 @@ from pydantic import BaseModel
 
 
 class AttachmentRef(BaseModel):
-    """聊天请求中的附件引用：文件解析后的纯文本。"""
+    """聊天请求中的附件引用。
+
+    文本附件：file_type 为文档类型（txt/markdown/csv/pdf/docx/xlsx），content 为解析文本；
+    图片附件：file_type 为 "image"，image 为 data URL，content 为 OCR 提取文字（可为空）。
+    """
 
     filename: str
-    content: str
+    file_type: str = "text"
+    content: str = ""
+    image: str | None = None
+
+
+class FileUrlRequest(BaseModel):
+    """粘贴链接下载请求体。"""
+
+    url: str
 
 
 class ChatRequest(BaseModel):
