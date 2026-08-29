@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import APP_NAME
-from backend.api.routers import auth, chat, mcp, sessions, settings, usage
+from backend.api.routers import auth, chat, files, mcp, sessions, settings, usage
 
 app = FastAPI(title=APP_NAME)
 
@@ -28,6 +28,7 @@ app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="asse
 # 注册各业务领域路由
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(files.router)
 app.include_router(sessions.router)
 app.include_router(mcp.router)
 app.include_router(settings.router)

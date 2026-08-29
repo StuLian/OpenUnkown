@@ -31,7 +31,7 @@ async def chat(
     # 校验模式，非法或缺省时用默认模式
     mode = req.mode if req.mode and is_valid_mode(req.mode) else DEFAULT_MODE
     return StreamingResponse(
-        stream_answer(req.message, req.session_id, model, mode, user_id, request),
+        stream_answer(req.message, req.session_id, model, mode, user_id, request, req.attachments),
         media_type="text/event-stream",
     )
 

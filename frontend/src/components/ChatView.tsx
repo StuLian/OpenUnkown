@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api/client";
-import { fetchSessionMessages } from "../api/endpoints";
+import {
+  fetchFileLimits,
+  fetchSessionMessages,
+  uploadFile,
+} from "../api/endpoints";
 import { readSseStream } from "../lib/sse";
 import Markdown from "./Markdown";
-import type { ModeOption, Usage } from "../types";
+import type { Attachment, FileLimits, ModeOption, Usage } from "../types";
 
 interface ToolCall {
   id: string;
@@ -37,6 +41,12 @@ function uid(prefix: string): string {
   );
 }
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function buildMeta(
   usedModel: string,
   usedMode: string,
@@ -57,13 +67,24 @@ interface UseChatOptions {
   model: string;
   mode: string;
   modes: ModeOption[];
+  limits: FileLimits | null;
   onSettled?: () => void;
 }
 
-function useChat({ sessionId, model, mode, modes, onSettled }: UseChatOptions) {
+function useChat({
+  sessionId,
+  model,
+  mode,
+  modes,
+  limits,
+  onSettled,
+}: UseChatOptions) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const onSettledRef = useRef(onSettled);
   onSettledRef.current = onSettled;
@@ -109,11 +130,55 @@ function useChat({ sessionId, model, mode, modes, onSettled }: UseChatOptions) {
     };
   }, [sessionId]);
 
+  // 上传并解析文件，成功后将解析结果挂到附件列表。
+  const attachFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files);
+      if (list.length === 0) return;
+      setUploading(true);
+      setUploadError(null);
+      try {
+        for (const f of list) {
+          // 本地预校验：扩展名 + 大小（后端仍会兜底校验）
+          const ext = (f.name.split(".").pop() || "").toLowerCase();
+          if (limits && !limits.extensions.includes(ext)) {
+            throw new Error(
+              `不支持的文件类型 .${ext || "?"}，仅支持 ${limits.extensions.join("/")}`
+            );
+          }
+          if (limits && f.size > limits.max_file_size) {
+            throw new Error(
+              `文件过大（${formatSize(f.size)}），上限 ${formatSize(limits.max_file_size)}`
+            );
+          }
+          const att = await uploadFile(f);
+          setAttachments((prev) => [...prev, { ...att, id: uid("att") }]);
+        }
+      } catch (e) {
+        setUploadError((e as Error).message || "上传失败");
+      } finally {
+        setUploading(false);
+      }
+    },
+    [limits]
+  );
+
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
   const send = useCallback(async () => {
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy || uploading) return;
 
     setInput("");
+    // 发送前捕获当前附件并清空，避免发送过程中再次追加导致状态不一致
+    const attachmentsToSend = attachments.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+    }));
+    setAttachments([]);
+    setUploadError(null);
     const botId = uid("bot");
 
     setMessages((prev) => [
@@ -149,6 +214,7 @@ function useChat({ sessionId, model, mode, modes, onSettled }: UseChatOptions) {
           session_id: sessionId,
           model,
           mode,
+          attachments: attachmentsToSend,
         }),
         signal: controller.signal,
       });
@@ -235,13 +301,25 @@ function useChat({ sessionId, model, mode, modes, onSettled }: UseChatOptions) {
       setBusy(false);
       onSettledRef.current?.();
     }
-  }, [input, busy, sessionId, model, mode, modes]);
+  }, [input, busy, uploading, attachments, sessionId, model, mode, modes]);
 
   const stop = useCallback(() => {
     controllerRef.current?.abort();
   }, []);
 
-  return { messages, input, setInput, busy, send, stop };
+  return {
+    messages,
+    input,
+    setInput,
+    busy,
+    attachments,
+    uploading,
+    uploadError,
+    attachFiles,
+    removeAttachment,
+    send,
+    stop,
+  };
 }
 
 interface ChatViewProps {
@@ -263,9 +341,24 @@ export default function ChatView({
   onOpenSettings,
   onSettled,
 }: ChatViewProps) {
-  const chat = useChat({ sessionId, model, mode, modes, onSettled });
+  const [limits, setLimits] = useState<FileLimits | null>(null);
+  const chat = useChat({ sessionId, model, mode, modes, limits, onSettled });
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 拉取上传限制，供上传前本地校验（失败时静默忽略，后端仍会兜底校验）。
+  useEffect(() => {
+    let cancelled = false;
+    fetchFileLimits()
+      .then((l) => {
+        if (!cancelled) setLimits(l);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -280,6 +373,18 @@ export default function ChatView({
     el.style.height = Math.min(el.scrollHeight, 180) + "px";
   }, [chat.input]);
 
+  const accept = (limits?.extensions ?? [
+    "txt",
+    "md",
+    "markdown",
+    "csv",
+    "pdf",
+    "docx",
+    "xlsx",
+  ])
+    .map((e) => "." + e)
+    .join(",");
+
   return (
     <>
       <div id="chat" ref={scrollRef}>
@@ -288,7 +393,8 @@ export default function ChatView({
             <div className="empty">
               <h2>你好，我是 OpenUnknown</h2>
               <div>
-                有什么想问的，尽管开始吧。支持天气查询与自定义 MCP 工具。
+                有什么想问的，尽管开始吧。支持天气查询、自定义 MCP 工具，
+                也可以上传文档/表格让我读内容作答。
               </div>
             </div>
           ) : (
@@ -307,7 +413,43 @@ export default function ChatView({
       ) : null}
 
       <footer>
+        {chat.attachments.length > 0 || chat.uploading || chat.uploadError ? (
+          <div className="attach-row">
+            {chat.attachments.map((a) => (
+              <span
+                key={a.id}
+                className="attach-chip"
+                title={`${a.file_type} · ${formatSize(a.size)}`}
+              >
+                <span className="attach-icon">📎</span>
+                <span className="attach-name">{a.filename}</span>
+                <button
+                  className="attach-remove"
+                  title="移除"
+                  aria-label="移除附件"
+                  onClick={() => chat.removeAttachment(a.id)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {chat.uploading ? <span className="attach-status">解析中…</span> : null}
+            {chat.uploadError ? (
+              <span className="attach-error">{chat.uploadError}</span>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="input-wrap">
+          <button
+            className="attach-btn"
+            title="上传附件（txt / md / csv / pdf / docx / xlsx）"
+            aria-label="上传附件"
+            disabled={chat.uploading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            📎
+          </button>
           <textarea
             ref={textareaRef}
             rows={1}
@@ -325,7 +467,7 @@ export default function ChatView({
           />
           <button
             className={"send" + (chat.busy ? " stop" : "")}
-            disabled={!hasApiKey}
+            disabled={!hasApiKey || chat.uploading}
             onClick={() => {
               if (chat.busy) chat.stop();
               else void chat.send();
@@ -334,7 +476,23 @@ export default function ChatView({
             {chat.busy ? "停止" : "发送"}
           </button>
         </div>
-        <div className="hint">回车发送 · Shift + 回车换行</div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={accept}
+          style={{ display: "none" }}
+          onChange={(e) => {
+            if (e.target.files && e.target.files.length > 0) {
+              void chat.attachFiles(e.target.files);
+            }
+            // 重置 value，允许再次选择同一文件
+            e.target.value = "";
+          }}
+        />
+
+        <div className="hint">回车发送 · Shift + 回车换行 · 支持上传文档/表格作为附件</div>
       </footer>
     </>
   );

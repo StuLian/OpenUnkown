@@ -4,12 +4,13 @@ from __future__ import annotations
 import json
 
 from fastapi import Request
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from backend import store
 from backend.agent.graph import get_graph
 from backend.auth.service import resolve_api_key
 from backend.config import DEFAULT_PLATFORM, mode_enables_thinking
+from backend.files.parser import MAX_CONTENT_CHARS
 
 
 def sse_event(payload: dict) -> str:
@@ -45,7 +46,33 @@ def message_to_dict(m) -> dict | None:
     return result
 
 
-async def stream_answer(message: str, session_id: str, model: str, mode: str, user_id: str, request: Request):
+def _attachment_messages(attachments: list) -> tuple[list[SystemMessage], list[str]]:
+    """把附件解析内容包装成 SystemMessage（正文不进入用户气泡），并返回附件名列表。
+
+    附件正文以 system 消息形式持久化到 checkpoint，模型每一轮都能看到；
+    message_to_dict 会过滤 system 消息，因此历史回显时不会刷出大段正文。
+    """
+    msgs: list[SystemMessage] = []
+    names: list[str] = []
+    for i, att in enumerate(attachments, 1):
+        filename = (getattr(att, "filename", None) or "未命名文件")
+        content = getattr(att, "content", None) or ""
+        # 后端兜底截断，防止绕过前端直接提交超长内容
+        if len(content) > MAX_CONTENT_CHARS:
+            content = content[:MAX_CONTENT_CHARS] + "\n...[内容过长已截断]"
+        names.append(filename)
+        msgs.append(
+            SystemMessage(
+                content=(
+                    f"[附件 {i}] 用户上传了文件《{filename}》，其解析后的纯文本内容如下，"
+                    f"请结合这些内容回答用户问题：\n\n{content}"
+                )
+            )
+        )
+    return msgs, names
+
+
+async def stream_answer(message: str, session_id: str, model: str, mode: str, user_id: str, request: Request, attachments: list | None = None):
     """以 SSE 方式逐 token 返回所选模型/模式的回答。
 
     客户端断开(点击停止)时立即中断底层生成，结束时回传 token 用量。
@@ -90,7 +117,13 @@ async def stream_answer(message: str, session_id: str, model: str, mode: str, us
             "mode": mode,
         },
     }
-    inputs = {"messages": [HumanMessage(content=message)]}
+    # 附件：正文以 system 消息注入（不污染用户气泡），附件名以轻量标记追加到用户消息
+    # 以便历史回显时仍能看到本轮带过哪些文件。会话标题仍取原始 message，不含附件名。
+    attach_msgs, attach_names = _attachment_messages(attachments or [])
+    model_message = message
+    if attach_names:
+        model_message = f"{message}\n\n（已上传附件：{'、'.join(attach_names)}）"
+    inputs = {"messages": [*attach_msgs, HumanMessage(content=model_message)]}
     usage: dict | None = None
 
     yield sse_event({"model": model, "mode": mode})

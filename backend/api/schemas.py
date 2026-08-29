@@ -4,6 +4,13 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 
+class AttachmentRef(BaseModel):
+    """聊天请求中的附件引用：文件解析后的纯文本。"""
+
+    filename: str
+    content: str
+
+
 class ChatRequest(BaseModel):
     """聊天请求体。"""
 
@@ -11,6 +18,7 @@ class ChatRequest(BaseModel):
     session_id: str
     model: str | None = None
     mode: str | None = None
+    attachments: list[AttachmentRef] = []
 
 
 class McpServerSaveRequest(BaseModel):

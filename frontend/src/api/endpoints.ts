@@ -2,8 +2,10 @@
 
 import { apiJson } from "./client";
 import type {
+  Attachment,
   AuthResponse,
   Challenge,
+  FileLimits,
   HistoryMessage,
   McpServer,
   McpServerType,
@@ -186,4 +188,16 @@ export function clearApiKeyRequest(
 
 export function fetchUsage(): Promise<UsageStats> {
   return apiJson<UsageStats>("/api/usage");
+}
+
+// ===== 文件上传与解析 =====
+export function fetchFileLimits(): Promise<FileLimits> {
+  return apiJson<FileLimits>("/api/files/limits");
+}
+
+// 上传单文件并返回解析结果；content 为解析后的纯文本。
+export function uploadFile(file: File): Promise<Attachment> {
+  const form = new FormData();
+  form.append("file", file);
+  return apiJson<Attachment>("/api/files", { method: "POST", body: form });
 }

@@ -95,6 +95,22 @@ export interface Challenge {
   public_key_pem: string;
 }
 
+export interface FileLimits {
+  extensions: string[];
+  max_file_size: number;
+  max_content_chars: number;
+}
+
+export interface Attachment {
+  id: string;
+  filename: string;
+  file_type: string;
+  size: number;
+  content: string;
+  char_count: number;
+  truncated: boolean;
+}
+
 export interface AuthResponse {
   token: string;
   user: User;
