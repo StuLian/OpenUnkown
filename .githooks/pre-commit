@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# pre-commit 钩子：提交前刷新 AGENTS.md 的自动生成区域，并把变更纳入本次提交。
+#
+# 说明：
+#   - 只重写 AGENTS.md 中 <!-- AUTO-GEN:* --> 标记内的内容，手写区不受影响；
+#   - 仅当生成器产出变化时才会 git add AGENTS.md（不重放无关的手动改动）；
+#   - 想跳过本次钩子：git commit --no-verify
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+GEN="scripts/gen_agents_doc.py"
+if [[ ! -f "$GEN" ]]; then
+  echo "[pre-commit] 未找到 $GEN，跳过 AGENTS.md 刷新"
+  exit 0
+fi
+
+before="$(git hash-object AGENTS.md 2>/dev/null || true)"
+python3 "$GEN"
+after="$(git hash-object AGENTS.md 2>/dev/null || true)"
+
+if [[ "$before" != "$after" ]]; then
+  echo "[pre-commit] AGENTS.md 已刷新，纳入本次提交"
+  git add AGENTS.md
+fi
