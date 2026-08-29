@@ -19,6 +19,7 @@ from backend.store.sessions import (
     thread_id_for,
     touch_session,
 )
+from backend.store.usage import log_usage, usage_stats
 from backend.store.users import (
     create_user,
     delete_user_api_key,
@@ -50,4 +51,6 @@ __all__ = [
     "get_user_api_key_cipher",
     "delete_user_api_key",
     "list_user_platforms",
+    "log_usage",
+    "usage_stats",
 ]

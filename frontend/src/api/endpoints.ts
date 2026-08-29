@@ -13,6 +13,7 @@ import type {
   Session,
   SettingsInfo,
   User,
+  UsageStats,
 } from "../types";
 
 function jsonInit(method: string, body: unknown): RequestInit {
@@ -181,4 +182,8 @@ export function clearApiKeyRequest(
     `/api/settings/api-key?platform=${encodeURIComponent(platform)}`,
     { method: "DELETE" }
   );
+}
+
+export function fetchUsage(): Promise<UsageStats> {
+  return apiJson<UsageStats>("/api/usage");
 }

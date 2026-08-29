@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { apiFetch } from "../api/client";
 import { fetchSessionMessages } from "../api/endpoints";
 import { readSseStream } from "../lib/sse";
@@ -81,11 +88,23 @@ function useChat({ sessionId, model, mode, modes, onSettled }: UseChatOptions) {
         const data = await fetchSessionMessages(sessionId);
         if (cancelled) return;
         setMessages(
-          data.messages.map((m) => ({
-            id: uid("hist"),
-            role: m.role,
-            content: m.content,
-          }))
+          data.messages.map((m) => {
+            const msg: Message = {
+              id: uid("hist"),
+              role: m.role,
+              content: m.content,
+            };
+            if (m.role === "assistant" && m.usage) {
+              msg.meta =
+                "本轮 Tokens：输入 " +
+                m.usage.input_tokens +
+                " · 输出 " +
+                m.usage.output_tokens +
+                " · 合计 " +
+                m.usage.total_tokens;
+            }
+            return msg;
+          })
         );
       } catch {
         if (!cancelled) setMessages([]);
@@ -305,10 +324,11 @@ export default function ChatView({
               autoGrow();
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void chat.send();
-              }
+              if (e.key !== "Enter" || e.shiftKey) return;
+              // 中文/日文等输入法组词确认时的回车（isComposing / keyCode 229）不应触发发送
+              if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+              e.preventDefault();
+              void chat.send();
             }}
           />
           <button
@@ -328,12 +348,120 @@ export default function ChatView({
   );
 }
 
+// 把正文里的 Markdown 图片 ![](url) 渲染成 <img>，其余文本保持纯文本（保留换行）。
+function renderMessageContent(content: string): ReactNode {
+  const nodes: ReactNode[] = [];
+  const regex = /!\[([^\]]*)\]\(([^)\s]+)\)/g;
+  let lastIndex = 0;
+  let key = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(
+        <Fragment key={`t${key++}`}>
+          {content.slice(lastIndex, match.index)}
+        </Fragment>
+      );
+    }
+    nodes.push(
+      <a
+        key={`img${key++}`}
+        href={match[2]}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="msg-img-link"
+      >
+        <img
+          src={match[2]}
+          alt={match[1] || "图片"}
+          className="msg-img"
+          loading="lazy"
+        />
+      </a>
+    );
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < content.length) {
+    nodes.push(<Fragment key={`t${key++}`}>{content.slice(lastIndex)}</Fragment>);
+  }
+  return nodes;
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // 非安全上下文（如 http）下的降级方案
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        /* ignore */
+      }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <button
+      className={"copy-btn" + (copied ? " copied" : "")}
+      title={copied ? "已复制" : "复制"}
+      aria-label="复制"
+      onClick={() => void copy()}
+    >
+      {copied ? (
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <rect x="9" y="9" width="13" height="13" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 function MessageRow({ message }: { message: Message }) {
   if (message.role === "user") {
     return (
       <div className="msg user">
         <div className="avatar">我</div>
-        <div className="bubble">{message.content}</div>
+        <div className="msg-body">
+          <div className="bubble">{renderMessageContent(message.content)}</div>
+          <CopyButton text={message.content} />
+        </div>
       </div>
     );
   }
@@ -377,20 +505,23 @@ function MessageRow({ message }: { message: Message }) {
 
       <div className="msg bot">
         <div className="avatar">O</div>
-        <div
-          className={
-            "bubble" +
-            (message.error ? " error" : "") +
-            (message.streaming ? " cursor-blink" : "")
-          }
-        >
-          {message.content}
-        </div>
-        {message.meta ? (
-          <div className={"meta" + (message.stopped ? " stopped" : "")}>
-            {message.meta}
+        <div className="msg-body">
+          <div
+            className={
+              "bubble" +
+              (message.error ? " error" : "") +
+              (message.streaming ? " cursor-blink" : "")
+            }
+          >
+            {renderMessageContent(message.content)}
           </div>
-        ) : null}
+          {message.meta ? (
+            <div className={"meta" + (message.stopped ? " stopped" : "")}>
+              {message.meta}
+            </div>
+          ) : null}
+          {!message.streaming ? <CopyButton text={message.content} /> : null}
+        </div>
       </div>
     </>
   );

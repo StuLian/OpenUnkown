@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import {
   clearApiKeyRequest,
+  fetchUsage,
   saveApiKeyRequest,
   testApiKeyRequest,
 } from "../api/endpoints";
-import type { SettingsInfo } from "../types";
+import type { SettingsInfo, UsageStats } from "../types";
 import Modal from "./Modal";
 
 type Result = { kind: "" | "success" | "error"; text: string } | null;
@@ -28,6 +29,7 @@ export default function SettingsModal({
   const [result, setResult] = useState<Result>(null);
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [usage, setUsage] = useState<UsageStats | null>(null);
 
   useEffect(() => {
     if (open && settings) {
@@ -37,6 +39,19 @@ export default function SettingsModal({
       setResult(null);
     }
   }, [open, settings]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void fetchUsage()
+      .then((u) => {
+        if (!cancelled) setUsage(u);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const hasKey = settings?.current.has_key ?? false;
 
@@ -190,6 +205,37 @@ export default function SettingsModal({
           ApiKey 仅加密存储在本地数据库（用你的登录密码派生密钥加密），明文不回显。
           未配置 ApiKey 时无法使用对话功能，请务必填写真实可用的 Key。
         </div>
+
+        {usage && usage.totals.requests > 0 ? (
+          <div className="usage-box">
+            <div className="usage-title">用量统计</div>
+            <div className="usage-summary">
+              共 {usage.totals.requests} 次请求 · 输入 {usage.totals.input_tokens}{" "}
+              · 输出 {usage.totals.output_tokens} · 合计{" "}
+              {usage.totals.total_tokens} tokens
+            </div>
+            {usage.by_model.length > 0 ? (
+              <table className="usage-table">
+                <thead>
+                  <tr>
+                    <th>模型</th>
+                    <th>次数</th>
+                    <th>Tokens</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usage.by_model.map((m) => (
+                    <tr key={m.model}>
+                      <td>{m.model}</td>
+                      <td>{m.requests}</td>
+                      <td>{m.total_tokens}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </Modal>
   );

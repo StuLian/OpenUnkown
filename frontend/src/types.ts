@@ -16,6 +16,7 @@ export interface Session {
 export interface HistoryMessage {
   role: "user" | "assistant";
   content: string;
+  usage?: Usage;
 }
 
 export interface ModelOption {
@@ -69,6 +70,24 @@ export interface Usage {
   input_tokens: number;
   output_tokens: number;
   total_tokens: number;
+}
+
+export interface UsageTotals extends Usage {
+  requests: number;
+}
+
+export interface UsageByModel extends UsageTotals {
+  model: string;
+}
+
+export interface UsageByDay extends UsageTotals {
+  date: string;
+}
+
+export interface UsageStats {
+  totals: UsageTotals;
+  by_model: UsageByModel[];
+  by_day: UsageByDay[];
 }
 
 export interface Challenge {

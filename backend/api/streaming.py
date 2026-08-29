@@ -18,9 +18,10 @@ def sse_event(payload: dict) -> str:
 
 
 def message_to_dict(m) -> dict | None:
-    """把 LangChain 消息对象转成前端可用的 {role, content}。
+    """把 LangChain 消息对象转成前端可用的 {role, content, usage?}。
 
     工具调用相关的中间消息不展示：tool 消息、以及仅包含 tool_calls 没有正文的 assistant 消息。
+    assistant 消息若携带 usage_metadata，则附上 token 用量，供前端刷新后仍能展示。
     """
     if m.type in ("system", "tool"):
         return None
@@ -30,7 +31,18 @@ def message_to_dict(m) -> dict | None:
     role = {"human": "user", "ai": "assistant"}.get(m.type, m.type)
     if role not in ("user", "assistant") or not content:
         return None
-    return {"role": role, "content": content}
+    result = {"role": role, "content": content}
+    usage_metadata = getattr(m, "usage_metadata", None)
+    if usage_metadata:
+        try:
+            result["usage"] = {
+                "input_tokens": usage_metadata.get("input_tokens", 0),
+                "output_tokens": usage_metadata.get("output_tokens", 0),
+                "total_tokens": usage_metadata.get("total_tokens", 0),
+            }
+        except Exception:
+            pass
+    return result
 
 
 async def stream_answer(message: str, session_id: str, model: str, mode: str, user_id: str, request: Request):
@@ -144,5 +156,6 @@ async def stream_answer(message: str, session_id: str, model: str, mode: str, us
         yield sse_event({"error": str(exc)})
 
     if usage:
+        store.log_usage(user_id, session_id, model, mode, usage)
         yield sse_event({"usage": usage})
     yield "data: [DONE]\n\n"
