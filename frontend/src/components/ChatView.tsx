@@ -30,6 +30,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   images?: string[];
+  attachments?: string[];
   error?: boolean;
   stopped?: boolean;
   meta?: string;
@@ -133,6 +134,7 @@ function useChat({
               role: m.role,
               content: m.content,
               images: m.images,
+              attachments: m.attachments,
             };
             if (m.role === "assistant" && m.usage) {
               msg.meta =
@@ -230,13 +232,20 @@ function useChat({
     const imageUrls = attachments
       .filter((a) => a.file_type === "image" && a.image)
       .map((a) => a.image as string);
+    const attachNames = attachments.map((a) => a.filename);
     setAttachments([]);
     setUploadError(null);
     const botId = uid("bot");
 
     setMessages((prev) => [
       ...prev,
-      { id: uid("user"), role: "user", content: text, images: imageUrls },
+      {
+        id: uid("user"),
+        role: "user",
+        content: text,
+        images: imageUrls,
+        attachments: attachNames,
+      },
       { id: botId, role: "assistant", content: "", streaming: true, toolCalls: [] },
     ]);
     setBusy(true);
@@ -695,6 +704,12 @@ function MessageRow({ message }: { message: Message }) {
           {message.content ? (
             <div className="bubble">
               <Markdown content={message.content} autoImageLinks={false} />
+            </div>
+          ) : null}
+          {message.attachments && message.attachments.length > 0 ? (
+            <div className="attach-caption">
+              <span className="attach-caption-icon">📎</span>
+              {message.attachments.join("、")}
             </div>
           ) : null}
           <CopyButton text={message.content} />

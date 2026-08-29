@@ -199,6 +199,14 @@ header .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
   cursor: zoom-in;
 }
 
+/* 用户消息里附件文件名的 caption（气泡下方） */
+.attach-caption {
+  margin-top: 6px; font-size: 12px; color: var(--muted);
+  display: flex; align-items: center; gap: 4px;
+  max-width: 100%; overflow-wrap: break-word; word-break: break-all;
+}
+.attach-caption-icon { flex-shrink: 0; }
+
 /* 消息内 Markdown 排版 */
 .bubble > :first-child { margin-top: 0; }
 .bubble > :last-child { margin-bottom: 0; }

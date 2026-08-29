@@ -17,6 +17,7 @@ export interface HistoryMessage {
   role: "user" | "assistant";
   content: string;
   images?: string[];
+  attachments?: string[];
   usage?: Usage;
 }
 

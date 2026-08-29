@@ -42,6 +42,9 @@ def message_to_dict(m) -> dict | None:
     result = {"role": role, "content": content}
     if images:
         result["images"] = images
+    attach_names = (getattr(m, "additional_kwargs", None) or {}).get("attachment_names") or []
+    if attach_names:
+        result["attachments"] = attach_names
     usage_metadata = getattr(m, "usage_metadata", None)
     if usage_metadata:
         try:
@@ -167,17 +170,16 @@ async def stream_answer(message: str, session_id: str, model: str, mode: str, us
         },
     }
 
-    model_message = message
-    if attach_names:
-        model_message = f"{message}\n\n（已上传附件：{'、'.join(attach_names)}）"
+    # 附件名不再拼进正文，而是放到 additional_kwargs，供历史回显单独渲染成 caption
+    extra_kwargs = {"attachment_names": attach_names} if attach_names else {}
 
     if image_urls:
-        content_blocks: list[dict] = [{"type": "text", "text": model_message}]
+        content_blocks: list[dict] = [{"type": "text", "text": message}]
         for url in image_urls:
             content_blocks.append({"type": "image_url", "image_url": {"url": url}})
-        human_message = HumanMessage(content=content_blocks)
+        human_message = HumanMessage(content=content_blocks, additional_kwargs=extra_kwargs)
     else:
-        human_message = HumanMessage(content=model_message)
+        human_message = HumanMessage(content=message, additional_kwargs=extra_kwargs)
 
     inputs = {"messages": [*attach_msgs, human_message]}
     usage: dict | None = None
