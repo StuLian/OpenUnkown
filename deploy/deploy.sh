@@ -44,8 +44,21 @@ fi
 log "包管理器：$PM"
 
 # ---- 1. 系统依赖 ----
+# Node.js 说明：飞书/高德等 MCP 走 stdio + npx 子进程，服务器必须装 Node（推荐 >= 18），
+# 否则这些 MCP 工具会加载失败且被静默吞掉，模型拿不到工具只能凭记忆编造答案。
 log "安装系统依赖..."
-$INSTALL git $PY_PKGS nginx "$SQLITE_PKG" curl ca-certificates
+$INSTALL git $PY_PKGS nginx "$SQLITE_PKG" curl ca-certificates nodejs npm
+
+# ---- 1.1 校验 npx（MCP stdio 工具依赖 Node 运行时）----
+if command -v npx >/dev/null 2>&1; then
+  MAJOR="$(node -e 'process.stdout.write(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)"
+  log "npx 可用：v$(npx --version 2>/dev/null)（Node 主版本 $MAJOR）"
+  if [[ "$MAJOR" =~ ^[0-9]+$ ]] && [[ "$MAJOR" -lt 18 ]]; then
+    warn "Node 主版本 $MAJOR < 18，@amap/amap-maps-mcp-server 等现代 MCP 包可能无法运行，建议升级到 Node 18+"
+  fi
+else
+  warn "未找到 npx：高德/飞书等 stdio 型 MCP 工具将无法加载（可用 NodeSource 安装 Node 18+）"
+fi
 
 # ---- 2. Python 3.12（dnf 系尝试，失败用系统自带）----
 if [[ -n "$PY312_PKGS" ]]; then

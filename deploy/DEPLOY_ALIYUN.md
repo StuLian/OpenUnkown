@@ -17,7 +17,8 @@
 ```
 
 - 前端为 React（源码 `frontend/`），`dist/` 不入库，由 `deploy/deploy_local.sh` 在**本地构建**后随部署包上传，
-  由 FastAPI 直接托管（`/`、`/assets`、`/api`），**服务器无需装 Node、无单独前端部署**
+  由 FastAPI 直接托管（`/`、`/assets`、`/api`），**无单独前端部署**；但服务器仍要装 Node（`npx`）——
+  飞书/高德等 MCP 工具走 `stdio + npx` 子进程，`deploy.sh` 会自动装 `nodejs npm`（推荐 Node ≥ 18）
 - 数据库是 SQLite（`data/openunknown.db`），**不需要 MySQL/Redis**
 - 模型 ApiKey 由用户在 Web「模型设置」填写，加密落库，**不进环境变量**
 
@@ -81,7 +82,7 @@ ssh -i j71995.pem root@39.96.65.185
 ### 第 2 步 · 装环境 + 解压 + 装依赖 + 起服务
 
 ```bash
-dnf install -y git python3 python3-pip python3-devel sqlite curl
+dnf install -y git python3 python3-pip python3-devel sqlite curl nodejs npm
 dnf install -y python3.12 python3.12-pip python3.12-devel 2>/dev/null || echo "python3.12 不可用，用系统自带"
 
 useradd --system --create-home --shell /usr/sbin/nologin openunknown 2>/dev/null || true
