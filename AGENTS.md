@@ -1,7 +1,7 @@
 # AGENTS.md — OpenUnknown 项目上下文（给 AI 看）
 
 > 本文件是给 AI 的「项目地图」：新会话开始先读本文件即可快速上手，不必重新逐个探索目录。
-> 最后更新：2026-08-29（结构有变时**务必同步更新本文件**，尤其是模块职责、命令、约定三节）。
+> 最后更新：2026-09-07（结构有变时**务必同步更新本文件**，尤其是模块职责、命令、约定三节）。
 
 ## 1. 一句话概述
 
@@ -74,7 +74,9 @@ Pillow>=10.0
 
 **顶层**
 - `deploy/` — 部署脚本 + nginx + systemd + 证书（详见 `DEPLOY_ALIYUN.md`）
-- `docs/` — 架构图版本演进记录，**最新 = V1.6.0**（其余为历史版本）
+<!-- AUTO-GEN:LATEST -->
+- `docs/` — 架构图版本演进记录，**最新 = V1.7.0**（其余为历史版本）
+<!-- /AUTO-GEN:LATEST -->
 - `data/` — `openunknown.db`（+ WAL/shm）、密钥文件、hotels 数据
 - `csv/` — `Seattle_Hotels.csv`（RAG 数据源）
 - `test/` — `test_mcp_server.py`
@@ -108,6 +110,7 @@ npm run typecheck               # 类型检查
 | `/api/auth` | GET | `/me` | auth.py |
 | `/api/auth` | POST | `/logout` | auth.py |
 | `/api` | POST | `/chat` | chat.py |
+| `/api` | POST | `/chat/confirm` | chat.py |
 | `/api` | GET | `/models` | chat.py |
 | `/api` | GET | `/modes` | chat.py |
 | `/api/files` | GET | `/limits` | files.py |
@@ -140,13 +143,14 @@ npm run typecheck               # 类型检查
 4. **数据库**：SQLite 单例连接 + `threading.Lock` 串行访问，WAL 模式。表：`sessions`、`mcp_servers`、`users`、`user_api_keys`、`usage_log`；checkpoint 表（`checkpoints`/`writes`）由 `SqliteSaver` 自管。建表逻辑集中在 `store/db.py` 的 `get_conn()`，含幂等迁移。
 5. **扩展模型平台**：在 `config.py` 的 `PLATFORMS` 加条目即可；模型/模式白名单也在 `config.py`（`AVAILABLE_MODELS`/`MODES`），前后端共用。
 6. **LangGraph 结构**：`get_graph()` 构建 `StateGraph(MessagesState)`，节点 `chat` ⇄ `tools`，`START→chat`，工具调用后回到 chat。工具按需注入（weather/hotels/browser_use/lark_cli/MCP）。
-7. **飞书集成**：`agent/tools/lark_cli.py` 调用 `lark-cli`，system prompt 只注入短 domain 路由表，子命令由模型 `--help` 按需拉取。
+7. **飞书集成**：`agent/tools/lark_cli.py` 调用 `lark-cli`，system prompt 只注入短 domain 路由表，子命令由模型 `--help` 按需拉取。**写操作安全闸门**：tools 节点用 `interrupt()` 对 `write`/`high-risk-write` 命令先暂停，前端弹确认卡片，用户点「确认执行」后经 `POST /api/chat/confirm` 恢复执行（`high-risk-write` 确认后由 `ensure_yes()` 自动补 `--yes`）；`read` 直接放行。读写判定在 `classify_risk()`，以 `lark-cli <cmd> --help` 的 `Risk:` 行为权威信号并缓存，未知兜底为写。
 8. **LangSmith**：纯环境变量自动追踪，无埋点代码；tags=`openunknown`/`model:*`/`mode:*`。
 
 ## 7. 维护说明
 
-- 第 2（依赖版本）、5（路由表）、8（文件清单）节为自动生成区域，改代码后运行
-  `python scripts/gen_agents_doc.py` 一键刷新，**不要手改**。
+- 第 2（依赖版本）、5（路由表）、8（文件清单）节，以及第 3 节的「最新架构文档
+  版本」为自动生成区域，改代码/新增架构文档后运行 `python scripts/gen_agents_doc.py`
+  一键刷新，**不要手改**。
 - 已配置 pre-commit 钩子（`git config core.hooksPath .githooks`）：提交前自动刷新
   并纳入本次提交，无需手动跑生成器；跳过一次用 `git commit --no-verify`。
 - 模块职责（第 3 节）与第 6 节「约定与坑」为手写区：新增/删除模块或约定时

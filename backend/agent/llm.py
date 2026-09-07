@@ -83,6 +83,10 @@ class ThinkingChatOpenAI(ChatOpenAI):
         **kwargs: Any,
     ) -> Iterator[ChatGenerationChunk]:
         kwargs["stream"] = True
+        # 父类 BaseChatOpenAI._stream 会在 stream_usage=True 时注入 stream_options，
+        # 这里重写后需自己补上，否则流式响应拿不到 usage（token 用量）元数据。
+        if self.stream_usage:
+            kwargs["stream_options"] = {"include_usage": True}
         payload = self._get_request_payload(messages, stop=stop, **kwargs)
         default_chunk_class: Type[BaseMessageChunk] = AIMessageChunk
         base_generation_info = {}
@@ -116,6 +120,9 @@ class ThinkingChatOpenAI(ChatOpenAI):
         **kwargs: Any,
     ) -> AsyncIterator[ChatGenerationChunk]:
         kwargs["stream"] = True
+        # 同 _stream：补上父类本会注入的 stream_options，确保流式响应携带 usage。
+        if self.stream_usage:
+            kwargs["stream_options"] = {"include_usage": True}
         payload = self._get_request_payload(messages, stop=stop, **kwargs)
         default_chunk_class: Type[BaseMessageChunk] = AIMessageChunk
         base_generation_info = {}

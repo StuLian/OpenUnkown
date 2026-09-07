@@ -7,7 +7,6 @@ import {
 } from "react";
 import { apiFetch } from "../api/client";
 import {
-  attachUrl,
   fetchFileLimits,
   fetchSessionMessages,
   uploadFile,
@@ -38,6 +37,7 @@ interface Message {
   thinking?: string;
   thinkingStatus?: ThinkingStatus;
   toolCalls?: ToolCall[];
+  pendingConfirm?: { command: string; risk: string } | null;
 }
 
 function uid(prefix: string): string {
@@ -111,6 +111,7 @@ function useChat({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
+  const decideRef = useRef<((approved: boolean) => void) | null>(null);
   const onSettledRef = useRef(onSettled);
   onSettledRef.current = onSettled;
 
@@ -199,20 +200,6 @@ function useChat({
     [limits]
   );
 
-  // 粘贴链接：下载并解析，结果挂到附件列表。
-  const attachUrlRequest = useCallback(async (url: string) => {
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const att = await attachUrl(url);
-      setAttachments((prev) => [...prev, { ...att, id: uid("att") }]);
-    } catch (e) {
-      setUploadError((e as Error).message || "链接解析失败");
-    } finally {
-      setUploading(false);
-    }
-  }, []);
-
   const removeAttachment = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }, []);
@@ -250,9 +237,6 @@ function useChat({
     ]);
     setBusy(true);
 
-    const controller = new AbortController();
-    controllerRef.current = controller;
-
     let answer = "";
     let thinkingText = "";
     let thinkingStatus: ThinkingStatus = "thinking";
@@ -268,114 +252,154 @@ function useChat({
         prev.map((m) => (m.id === botId ? { ...m, ...p } : m))
       );
 
-    try {
-      const resp = await apiFetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          session_id: sessionId,
-          model,
-          mode,
-          attachments: attachmentsToSend,
-        }),
-        signal: controller.signal,
-      });
+    // 流式跑一轮；遇到飞书写操作确认时递归调用 /api/chat/confirm 恢复后续流。
+    const streamTurn = async (
+      url: string,
+      body: Record<string, unknown>
+    ): Promise<void> => {
+      const controller = new AbortController();
+      controllerRef.current = controller;
+      try {
+        const resp = await apiFetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
 
-      if (!resp.ok || !resp.body) {
-        const d = (await resp.json().catch(() => ({}))) as {
-          detail?: string;
-        };
-        throw new Error(d.detail || "请求失败");
-      }
+        if (!resp.ok || !resp.body) {
+          const d = (await resp.json().catch(() => ({}))) as {
+            detail?: string;
+          };
+          throw new Error(d.detail || "请求失败");
+        }
 
-      for await (const ev of readSseStream(resp)) {
-        if (ev.error) {
-          answer = "";
-          patch({ content: ev.error, error: true, streaming: false });
-          continue;
-        }
-        if (ev.usage) {
-          usage = ev.usage;
-          continue;
-        }
-        if (ev.model) {
-          usedModel = ev.model;
-          continue;
-        }
-        if (ev.mode) {
-          usedMode = ev.mode;
-          continue;
-        }
-        if (ev.notice) {
-          notice = ev.notice;
-          continue;
-        }
-        if (ev.thinking) {
-          thinkingText += ev.thinking;
-          patch({ thinking: thinkingText, thinkingStatus: "thinking" });
-          continue;
-        }
-        if (ev.tool_call) {
-          const tc = ev.tool_call;
-          if (!toolMap.has(tc.id)) {
-            toolMap.set(tc.id, { id: tc.id, name: tc.tool, status: "calling" });
+        for await (const ev of readSseStream(resp)) {
+          if (ev.error) {
+            answer = "";
+            patch({ content: ev.error, error: true, streaming: false });
+            continue;
+          }
+          if (ev.usage) {
+            usage = ev.usage;
+            continue;
+          }
+          if (ev.model) {
+            usedModel = ev.model;
+            continue;
+          }
+          if (ev.mode) {
+            usedMode = ev.mode;
+            continue;
+          }
+          if (ev.notice) {
+            notice = ev.notice;
+            continue;
+          }
+          if (ev.thinking) {
+            thinkingText += ev.thinking;
+            patch({ thinking: thinkingText, thinkingStatus: "thinking" });
+            continue;
+          }
+          if (ev.tool_call) {
+            const tc = ev.tool_call;
+            if (!toolMap.has(tc.id)) {
+              toolMap.set(tc.id, { id: tc.id, name: tc.tool, status: "calling" });
+              patch({ toolCalls: Array.from(toolMap.values()) });
+            }
+            continue;
+          }
+          if (ev.tool_result) {
+            const tr = ev.tool_result;
+            if (toolMap.has(tr.id)) {
+              const existing = toolMap.get(tr.id)!;
+              existing.status = "done";
+              existing.output = tr.output;
+            } else {
+              toolMap.set(tr.id, {
+                id: tr.id,
+                name: tr.tool,
+                status: "done",
+                output: tr.output,
+              });
+            }
             patch({ toolCalls: Array.from(toolMap.values()) });
+            continue;
           }
-          continue;
-        }
-        if (ev.tool_result) {
-          const tr = ev.tool_result;
-          if (toolMap.has(tr.id)) {
-            const existing = toolMap.get(tr.id)!;
-            existing.status = "done";
-            existing.output = tr.output;
-          } else {
-            toolMap.set(tr.id, {
-              id: tr.id,
-              name: tr.tool,
-              status: "done",
-              output: tr.output,
+          if (ev.confirm) {
+            patch({
+              pendingConfirm: {
+                command: ev.confirm.command,
+                risk: ev.confirm.risk,
+              },
             });
+            const approved = await new Promise<boolean>((resolve) => {
+              decideRef.current = resolve;
+            });
+            decideRef.current = null;
+            patch({ pendingConfirm: null });
+            await streamTurn("/api/chat/confirm", {
+              session_id: sessionId,
+              approved,
+              model: usedModel,
+              mode: usedMode,
+            });
+            return;
           }
-          patch({ toolCalls: Array.from(toolMap.values()) });
-          continue;
+          if (ev.delta) {
+            if (thinkingStatus !== "done") {
+              thinkingStatus = "done";
+              patch({ thinkingStatus: "done" });
+            }
+            answer += ev.delta;
+            patch({ content: answer });
+          }
         }
-        if (ev.delta) {
-          if (thinkingStatus !== "done") {
-            thinkingStatus = "done";
-            patch({ thinkingStatus: "done" });
-          }
-          answer += ev.delta;
-          patch({ content: answer });
+      } catch (err) {
+        if ((err as Error).name === "AbortError") {
+          stopped = true;
+        } else {
+          patch({ content: (err as Error).message, error: true });
         }
       }
-    } catch (err) {
-      if ((err as Error).name === "AbortError") {
-        stopped = true;
-      } else {
-        patch({ content: (err as Error).message, error: true });
-      }
-    } finally {
-      const modeName = modes.find((m) => m.id === usedMode)?.name ?? "";
-      const metaBase = buildMeta(usedModel, usedMode, usage, stopped, modeName);
-      patch({
-        streaming: false,
-        thinkingStatus: stopped ? "stopped" : "done",
-        stopped,
-        meta: notice
-          ? metaBase
-            ? `⚠ ${notice} · ${metaBase}`
-            : `⚠ ${notice}`
-          : metaBase,
-      });
-      controllerRef.current = null;
-      setBusy(false);
-      onSettledRef.current?.();
-    }
+    };
+
+    await streamTurn("/api/chat", {
+      message: text,
+      session_id: sessionId,
+      model,
+      mode,
+      attachments: attachmentsToSend,
+    });
+
+    const modeName = modes.find((m) => m.id === usedMode)?.name ?? "";
+    const metaBase = buildMeta(usedModel, usedMode, usage, stopped, modeName);
+    patch({
+      streaming: false,
+      thinkingStatus: stopped ? "stopped" : "done",
+      stopped,
+      meta: notice
+        ? metaBase
+          ? `⚠ ${notice} · ${metaBase}`
+          : `⚠ ${notice}`
+        : metaBase,
+    });
+    controllerRef.current = null;
+    setBusy(false);
+    onSettledRef.current?.();
   }, [input, busy, uploading, attachments, sessionId, model, mode, modes]);
 
+  const confirm = useCallback((approved: boolean) => {
+    decideRef.current?.(approved);
+  }, []);
+
   const stop = useCallback(() => {
+    // 正在等待飞书确认：点击停止视为取消该写操作，走 /chat/confirm 干净收尾
+    if (decideRef.current) {
+      decideRef.current(false);
+      decideRef.current = null;
+      return;
+    }
     controllerRef.current?.abort();
   }, []);
 
@@ -389,10 +413,10 @@ function useChat({
     uploadError,
     setUploadError,
     attachFiles,
-    attachUrl: attachUrlRequest,
     removeAttachment,
     send,
     stop,
+    confirm,
   };
 }
 
@@ -454,7 +478,7 @@ export default function ChatView({
     .map((e) => "." + e)
     .join(",");
 
-  // 粘贴：剪贴板里的图片/文件直接上传；整段纯链接自动下载上传。
+  // 粘贴：剪贴板里的图片/文件直接上传；普通文本（含链接）按默认粘贴进输入框。
   function handlePaste(e: ClipboardEvent<HTMLTextAreaElement>) {
     const items = e.clipboardData?.items;
     if (items) {
@@ -473,15 +497,9 @@ export default function ChatView({
         return;
       }
     }
-    const text = e.clipboardData?.getData("text") ?? "";
-    const trimmed = text.trim();
-    if (/^https?:\/\/\S+$/i.test(trimmed)) {
-      e.preventDefault();
-      void chat.attachUrl(trimmed);
-      return;
-    }
     // 从系统文件管理器复制的文件往往只拿到 file:// 路径，浏览器无法读取其内容
-    if (/^file:\/\//i.test(trimmed)) {
+    const text = e.clipboardData?.getData("text") ?? "";
+    if (/^file:\/\//i.test(text.trim())) {
       e.preventDefault();
       chat.setUploadError(
         "浏览器无法读取本地文件路径，请直接把文件拖拽到输入框，或点击 📎 按钮选择"
@@ -502,7 +520,9 @@ export default function ChatView({
               </div>
             </div>
           ) : (
-            chat.messages.map((m) => <MessageRow key={m.id} message={m} />)
+            chat.messages.map((m) => (
+              <MessageRow key={m.id} message={m} onConfirm={chat.confirm} />
+            ))
           )}
         </div>
       </div>
@@ -682,7 +702,13 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function MessageRow({ message }: { message: Message }) {
+function MessageRow({
+  message,
+  onConfirm,
+}: {
+  message: Message;
+  onConfirm: (approved: boolean) => void;
+}) {
   if (message.role === "user") {
     return (
       <div className="msg user">
@@ -758,21 +784,51 @@ function MessageRow({ message }: { message: Message }) {
       <div className="msg bot">
         <div className="avatar">O</div>
         <div className="msg-body">
-          <div
-            className={
-              "bubble" +
-              (message.error ? " error" : "") +
-              (message.streaming ? " cursor-blink" : "")
-            }
-          >
-            <Markdown content={message.content} />
-          </div>
+          {message.pendingConfirm ? (
+            <div className={"confirm-card" + (message.pendingConfirm.risk === "high-risk-write" ? " danger" : "")}>
+              <div className="confirm-title">
+                ⚠ 飞书写操作需要你的确认
+              </div>
+              <div className="confirm-risk">
+                风险级别：{message.pendingConfirm.risk}
+              </div>
+              <div className="confirm-cmd">
+                <code>{message.pendingConfirm.command}</code>
+              </div>
+              <div className="confirm-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={() => onConfirm(true)}
+                >
+                  确认执行
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => onConfirm(false)}
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              className={
+                "bubble" +
+                (message.error ? " error" : "") +
+                (message.streaming ? " cursor-blink" : "")
+              }
+            >
+              <Markdown content={message.content} />
+            </div>
+          )}
           {message.meta ? (
             <div className={"meta" + (message.stopped ? " stopped" : "")}>
               {message.meta}
             </div>
           ) : null}
-          {!message.streaming ? <CopyButton text={message.content} /> : null}
+          {!message.streaming && !message.pendingConfirm ? (
+            <CopyButton text={message.content} />
+          ) : null}
         </div>
       </div>
     </>

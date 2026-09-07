@@ -10,6 +10,7 @@ export interface StreamEvent {
   delta?: string;
   tool_call?: { id: string; tool: string; args?: unknown };
   tool_result?: { id: string; tool: string; output?: string };
+  confirm?: { command: string; risk: string; tool_call_id: string };
   usage?: Usage;
 }
 

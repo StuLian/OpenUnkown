@@ -570,6 +570,28 @@ button.attach-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 @keyframes tool-pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
 @keyframes tool-dot-blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
+/* 飞书写操作人工确认卡片 */
+.confirm-card {
+  padding: 12px 14px; border-radius: 14px; border-bottom-left-radius: 4px;
+  border: 1px solid rgba(255, 190, 92, 0.45);
+  background: rgba(255, 190, 92, 0.08);
+  max-width: 100%; line-height: 1.5;
+}
+.confirm-card.danger {
+  border-color: rgba(255, 108, 122, 0.5);
+  background: rgba(255, 108, 122, 0.08);
+}
+.confirm-title { font-weight: 600; font-size: 14px; color: var(--text); }
+.confirm-card.danger .confirm-title { color: #ff9aa8; }
+.confirm-risk { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.confirm-cmd {
+  margin-top: 8px; padding: 8px 10px; border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18); border: 1px solid var(--border);
+  font-size: 12px; overflow-wrap: anywhere; word-break: break-all;
+}
+.confirm-cmd code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
+.confirm-actions { display: flex; gap: 8px; margin-top: 10px; }
+
 /* 思考过程折叠展示 */
 .thinking {
   max-width: 78%;

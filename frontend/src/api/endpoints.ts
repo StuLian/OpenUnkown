@@ -201,12 +201,3 @@ export function uploadFile(file: File): Promise<Attachment> {
   form.append("file", file);
   return apiJson<Attachment>("/api/files", { method: "POST", body: form });
 }
-
-// 下载并解析一个链接（图片/文档），返回与上传相同结构的附件。
-export function attachUrl(url: string): Promise<Attachment> {
-  return apiJson<Attachment>("/api/files/url", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
-  });
-}

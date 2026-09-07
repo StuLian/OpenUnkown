@@ -4,8 +4,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
-from backend.api.schemas import ChatRequest
-from backend.api.streaming import stream_answer
+from backend.api.schemas import ChatConfirmRequest, ChatRequest
+from backend.api.streaming import resume_answer, stream_answer
 from backend.auth.deps import get_current_user_id
 from backend.config import (
     AVAILABLE_MODELS,
@@ -32,6 +32,21 @@ async def chat(
     mode = req.mode if req.mode and is_valid_mode(req.mode) else DEFAULT_MODE
     return StreamingResponse(
         stream_answer(req.message, req.session_id, model, mode, user_id, request, req.attachments),
+        media_type="text/event-stream",
+    )
+
+
+@router.post("/chat/confirm")
+async def chat_confirm(
+    req: ChatConfirmRequest,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+) -> StreamingResponse:
+    """飞书写操作人工确认：approved=True 执行、False 取消，从 checkpoint 恢复并继续流式输出。"""
+    model = req.model if req.model and is_valid_model(req.model) else DEFAULT_MODEL
+    mode = req.mode if req.mode and is_valid_mode(req.mode) else DEFAULT_MODE
+    return StreamingResponse(
+        resume_answer(req.session_id, req.approved, model, mode, user_id, request),
         media_type="text/event-stream",
     )
 

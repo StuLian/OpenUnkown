@@ -7,6 +7,7 @@ import logging
 
 from fastapi import Request
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.types import Command
 
 from backend import store
 from backend.agent.graph import extract_image_urls, extract_text_content, get_graph
@@ -92,6 +93,164 @@ def _split_attachments(attachments: list) -> tuple[list[SystemMessage], list[tup
     return text_msgs, images, names
 
 
+def _build_config(
+    user_id: str,
+    session_id: str,
+    model: str,
+    mode: str,
+    api_key: str,
+    username: str,
+) -> dict:
+    """组装 LangGraph 运行配置（/chat 与 /chat/confirm 共用）。"""
+    return {
+        "configurable": {
+            "thread_id": store.thread_id_for(user_id, session_id),
+            "model": model,
+            "mode": mode,
+            "platform": DEFAULT_PLATFORM,
+            "api_key": api_key,
+            "user_id": user_id,
+        },
+        # LangSmith 元信息：tags 便于过滤，metadata 便于在控制台按字段检索。
+        "tags": ["openunknown", f"user:{user_id}", f"model:{model}", f"mode:{mode}"],
+        "metadata": {
+            "session_id": session_id,
+            "user_id": user_id,
+            "user": username,
+            "model": model,
+            "mode": mode,
+        },
+    }
+
+
+async def _pending_confirm(graph, config: dict) -> dict | None:
+    """若图停在飞书写操作待确认的 interrupt 上，返回其负载；否则返回 None。"""
+    try:
+        state = await graph.aget_state(config)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("读取图状态失败: %s", e)
+        return None
+    if not state or not state.next:
+        return None
+    for task in (state.tasks or []):
+        for iv in (task.interrupts or []):
+            val = getattr(iv, "value", None)
+            if isinstance(val, dict) and val.get("type") == "lark_write_confirmation":
+                return {
+                    "command": val.get("command", ""),
+                    "risk": val.get("risk", ""),
+                    "tool_call_id": val.get("tool_call_id", ""),
+                }
+    return None
+
+
+async def _drain_pending_confirm(graph, config: dict, request: Request) -> bool:
+    """若该会话残留未确认的飞书写操作（用户刷新/切换会话后重发），先自动取消并跑完。
+
+    不把取消结果推给前端，只保证 checkpoint 干净，避免阻塞后续新消息。返回是否发生过取消。
+    """
+    if await _pending_confirm(graph, config) is None:
+        return False
+    try:
+        async for _ in graph.astream(
+            Command(resume={"approved": False}), config=config, stream_mode="messages"
+        ):
+            if await request.is_disconnected():
+                break
+    except Exception as e:  # noqa: BLE001
+        logger.warning("清理残留飞书确认失败: %s", e)
+    return True
+
+
+async def _stream_turn(
+    graph,
+    config: dict,
+    stream_input,
+    mode: str,
+    request: Request,
+    user_id: str,
+    session_id: str,
+    model: str,
+):
+    """跑完一轮图并产出 SSE 事件 dict（不含 model/mode/notice 头与 [DONE]）。
+
+    飞书写操作在 tools 节点被 interrupt 停住时，产出 confirm 事件且不产 usage；
+    整轮正常结束时产出 usage（并落 usage_log）。
+    """
+    usage = None
+    try:
+        async for chunk, meta in graph.astream(
+            stream_input, config=config, stream_mode="messages"
+        ):
+            # 客户端已断开则停止生成，async 生成器关闭会取消底层请求
+            if await request.is_disconnected():
+                break
+
+            node = meta.get("langgraph_node")
+
+            # tools 节点：推送工具调用详情给前端做透明化提示
+            if node == "tools":
+                # ToolMessage：工具执行完毕，推送结果摘要
+                if getattr(chunk, "type", None) == "tool":
+                    yield {
+                        "tool_result": {
+                            "id": chunk.tool_call_id,
+                            "tool": chunk.name,
+                            "output": chunk.content[:300]
+                            if isinstance(chunk.content, str)
+                            else str(chunk.content)[:300],
+                        }
+                    }
+                continue
+
+            if node != "chat":
+                continue
+
+            # chat 节点：在 AI 开始生成正文之前，先推送本轮的 tool_calls 信息
+            # 流式下同一个 tool_call 会分多个 chunk 到达，仅在 id 存在时推送一次
+            if getattr(chunk, "tool_calls", None):
+                for tc in chunk.tool_calls:
+                    tc_id = tc.get("id")
+                    if not tc_id:
+                        continue
+                    yield {
+                        "tool_call": {
+                            "id": tc_id,
+                            "tool": tc.get("name", ""),
+                            "args": tc.get("args", {}),
+                        }
+                    }
+
+            # 累积 token 用量(通常在最后一个 chunk 上)
+            if getattr(chunk, "usage_metadata", None):
+                usage = chunk.usage_metadata
+            # 仅思考模式推送推理过程(reasoning_content)；快速模式保持直接回答，不展示思考
+            if mode_enables_thinking(mode):
+                reasoning = (
+                    chunk.additional_kwargs.get("reasoning_content")
+                    if getattr(chunk, "additional_kwargs", None)
+                    else None
+                )
+                if isinstance(reasoning, str) and reasoning:
+                    yield {"thinking": reasoning}
+            # 工具调用阶段 content 可能是空串或非字符串，只把最终自然语言增量推给前端
+            text = getattr(chunk, "content", None)
+            if isinstance(text, str) and text:
+                yield {"delta": text}
+    except Exception as exc:  # noqa: BLE001
+        yield {"error": str(exc)}
+
+    # 图若停在飞书写操作待确认处，产出 confirm 事件；此时轮次未完成，不产 usage。
+    confirm = await _pending_confirm(graph, config)
+    if confirm is not None:
+        yield {"confirm": confirm}
+
+    if usage:
+        store.log_usage(user_id, session_id, model, mode, usage)
+        if confirm is None:
+            yield {"usage": usage}
+
+
 async def stream_answer(message: str, session_id: str, model: str, mode: str, user_id: str, request: Request, attachments: list | None = None):
     """以 SSE 方式逐 token 返回所选模型/模式的回答。
 
@@ -149,26 +308,10 @@ async def stream_answer(message: str, session_id: str, model: str, mode: str, us
         effective_mode = "fast"
 
     graph = await get_graph()
-    config = {
-        "configurable": {
-            "thread_id": store.thread_id_for(user_id, session_id),
-            "model": effective_model,
-            "mode": effective_mode,
-            "platform": DEFAULT_PLATFORM,
-            "api_key": api_key,
-            "user_id": user_id,
-        },
-        # LangSmith 元信息：tags 便于过滤，metadata 便于在控制台按字段检索。
-        # 同时挂 user_id 与 username，便于按用户过滤/检索。
-        "tags": ["openunknown", f"user:{user_id}", f"model:{effective_model}", f"mode:{effective_mode}"],
-        "metadata": {
-            "session_id": session_id,
-            "user_id": user_id,
-            "user": username,
-            "model": effective_model,
-            "mode": effective_mode,
-        },
-    }
+    config = _build_config(user_id, session_id, effective_model, effective_mode, api_key, username)
+
+    # 上一轮若残留未确认的飞书写操作（用户中途刷新/切换会话），先自动取消，避免阻塞本轮
+    await _drain_pending_confirm(graph, config, request)
 
     # 附件名不再拼进正文，而是放到 additional_kwargs，供历史回显单独渲染成 caption
     extra_kwargs = {"attachment_names": attach_names} if attach_names else {}
@@ -182,73 +325,56 @@ async def stream_answer(message: str, session_id: str, model: str, mode: str, us
         human_message = HumanMessage(content=message, additional_kwargs=extra_kwargs)
 
     inputs = {"messages": [*attach_msgs, human_message]}
-    usage: dict | None = None
 
     yield sse_event({"model": effective_model, "mode": effective_mode})
     if effective_model != model:
         yield sse_event({"notice": f"本条消息包含图片，已切换视觉模型 {effective_model} 处理"})
 
-    try:
-        async for chunk, meta in graph.astream(
-            inputs, config=config, stream_mode="messages"
-        ):
-            # 客户端已断开则停止生成，async 生成器关闭会取消底层请求
-            if await request.is_disconnected():
-                break
+    async for ev in _stream_turn(
+        graph, config, inputs, effective_mode, request, user_id, session_id, effective_model
+    ):
+        yield sse_event(ev)
+    yield "data: [DONE]\n\n"
 
-            node = meta.get("langgraph_node")
 
-            # tools 节点：推送工具调用详情给前端做透明化提示
-            if node == "tools":
-                # ToolMessage：工具执行完毕，推送结果摘要
-                if chunk.type == "tool":
-                    yield sse_event({
-                        "tool_result": {
-                            "id": chunk.tool_call_id,
-                            "tool": chunk.name,
-                            "output": chunk.content[:300] if isinstance(chunk.content, str) else str(chunk.content)[:300],
-                        }
-                    })
-                continue
+async def resume_answer(
+    session_id: str,
+    approved: bool,
+    model: str,
+    mode: str,
+    user_id: str,
+    request: Request,
+):
+    """飞书写操作人工确认后，从 checkpoint 恢复图并继续流式输出剩余回答。
 
-            if node != "chat":
-                continue
+    approved=True 表示用户确认执行写操作，False 表示取消。
+    """
+    if not store.get_session(user_id, session_id):
+        yield sse_event({"error": "会话不存在或无权访问"})
+        yield "data: [DONE]\n\n"
+        return
 
-            # chat 节点：在 AI 开始生成正文之前，先推送本轮的 tool_calls 信息
-            # 流式下同一个 tool_call 会分多个 chunk 到达，仅在 id 存在时推送一次
-            if getattr(chunk, "tool_calls", None):
-                for tc in chunk.tool_calls:
-                    tc_id = tc.get("id")
-                    if not tc_id:
-                        continue
-                    yield sse_event({
-                        "tool_call": {
-                            "id": tc_id,
-                            "tool": tc.get("name", ""),
-                            "args": tc.get("args", {}),
-                        }
-                    })
+    api_key = resolve_api_key(user_id, DEFAULT_PLATFORM)
+    if not api_key:
+        yield sse_event({"error": "尚未配置模型 ApiKey，请先在「模型设置」中填写"})
+        yield "data: [DONE]\n\n"
+        return
 
-            # 累积 token 用量(通常在最后一个 chunk 上)
-            if getattr(chunk, "usage_metadata", None):
-                usage = chunk.usage_metadata
-            # 仅思考模式推送推理过程(reasoning_content)；快速模式保持直接回答，不展示思考
-            if mode_enables_thinking(mode):
-                reasoning = (
-                    chunk.additional_kwargs.get("reasoning_content")
-                    if getattr(chunk, "additional_kwargs", None)
-                    else None
-                )
-                if isinstance(reasoning, str) and reasoning:
-                    yield sse_event({"thinking": reasoning})
-            # 工具调用阶段 content 可能是空串或非字符串，只把最终自然语言增量推给前端
-            text = chunk.content
-            if isinstance(text, str) and text:
-                yield sse_event({"delta": text})
-    except Exception as exc:  # noqa: BLE001
-        yield sse_event({"error": str(exc)})
+    user = store.get_user_by_id(user_id)
+    username = user["username"] if user else user_id
 
-    if usage:
-        store.log_usage(user_id, session_id, model, mode, usage)
-        yield sse_event({"usage": usage})
+    graph = await get_graph()
+    config = _build_config(user_id, session_id, model, mode, api_key, username)
+
+    async for ev in _stream_turn(
+        graph,
+        config,
+        Command(resume={"approved": bool(approved)}),
+        mode,
+        request,
+        user_id,
+        session_id,
+        model,
+    ):
+        yield sse_event(ev)
     yield "data: [DONE]\n\n"

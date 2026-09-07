@@ -33,6 +33,15 @@ class ChatRequest(BaseModel):
     attachments: list[AttachmentRef] = []
 
 
+class ChatConfirmRequest(BaseModel):
+    """飞书写操作人工确认的恢复请求体（/api/chat/confirm）。"""
+
+    session_id: str
+    approved: bool
+    model: str | None = None
+    mode: str | None = None
+
+
 class McpServerSaveRequest(BaseModel):
     """MCP Server 保存请求体。"""
 

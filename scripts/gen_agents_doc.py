@@ -14,6 +14,7 @@
     DEPS   — 依赖版本（requirements.txt + frontend/package.json）
     ROUTES — 后端 API 路由表（扫描 backend/api/routers/*.py）
     FILES  — 源码文件清单（backend/ 与 frontend/src/ 的目录树）
+    LATEST — 最新架构文档版本（扫描 docs/architecture_V*.html 取最大版本号）
 
 手写区域（概述、目录地图、约定与坑、维护说明）不受影响。
 """
@@ -105,13 +106,31 @@ def gen_files() -> str:
     return "\n".join(parts)
 
 
+def gen_latest() -> str:
+    """扫描 docs/architecture_V*.html，返回「最新版本」顶层 bullet。
+
+    版本号取文件名里最大的（按三元组比较，而非字符串字典序）。
+    """
+    versions: list[tuple[int, int, int]] = []
+    for path in (ROOT / "docs").glob("architecture_V*.html"):
+        m = re.fullmatch(r"architecture_V(\d+)\.(\d+)\.(\d+)\.html", path.name)
+        if m:
+            versions.append((int(m.group(1)), int(m.group(2)), int(m.group(3))))
+    if not versions:
+        latest = "未知"
+    else:
+        a, b, c = max(versions)
+        latest = f"V{a}.{b}.{c}"
+    return f"- `docs/` — 架构图版本演进记录，**最新 = {latest}**（其余为历史版本）"
+
+
 def main() -> int:
     if not AGENTS.exists():
         print(f"未找到 {AGENTS}")
         return 1
 
     text = AGENTS.read_text(encoding="utf-8")
-    for name, gen in (("DEPS", gen_deps), ("ROUTES", gen_routes), ("FILES", gen_files)):
+    for name, gen in (("DEPS", gen_deps), ("ROUTES", gen_routes), ("FILES", gen_files), ("LATEST", gen_latest)):
         new_text, n = _replace_region(text, name, gen())
         if n == 0:
             print(f"警告：未找到 AUTO-GEN:{name} 标记，跳过该区域")

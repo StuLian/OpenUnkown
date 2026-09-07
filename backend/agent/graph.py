@@ -13,6 +13,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.graph import START, StateGraph
 from langgraph.graph.message import MessagesState
 from langgraph.prebuilt import tools_condition
+from langgraph.types import interrupt
 from typing_extensions import TypedDict
 
 from backend.agent.llm import get_llm
@@ -20,7 +21,7 @@ from backend.agent.mcp import get_enabled_mcp_tools
 from backend.agent.prompts import IDENTITY_PROMPT, LARK_SECTION, SYSTEM_PROMPT
 from backend.agent.router import route_intents
 from backend.agent.tools import TOOLS as BUILTIN_TOOLS
-from backend.agent.tools.lark_cli import load_skill_descriptions
+from backend.agent.tools.lark_cli import classify_risk, ensure_yes, load_skill_descriptions
 from backend.config import (
     APP_NAME,
     DEFAULT_MODE,
@@ -278,12 +279,11 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
     if bound_tools:
         llm = llm.bind_tools(bound_tools)
     system_prompt = await _get_system_prompt(include_lark=want["feishu"])
-    # 身份指令放在历史消息之后，覆盖旧回复里可能出现的其他模型名
-    identity = SystemMessage(
-        content=IDENTITY_PROMPT.format(model_name=model_name)
-    )
+    # 身份指令合并进首条系统提示（放历史之前），避免成为最后一条消息干扰模型作答
+    # （此前放在历史末尾，视觉模型会把它当成当前任务，回答成「我是什么模型」）。
+    identity_text = IDENTITY_PROMPT.format(model_name=model_name)
     history = _compact_history(list(state["messages"]))
-    messages = [SystemMessage(content=system_prompt), *history, identity]
+    messages = [SystemMessage(content=f"{system_prompt}\n\n{identity_text}"), *history]
     if force_answer:
         messages.append(SystemMessage(
             content="已连续调用多次工具仍未得到最终答案。现在必须停止调用工具，"
@@ -308,6 +308,10 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
 
     把 RunnableConfig 透传给工具，使需要调用模型服务的工具（如酒店检索）能取到
     当前用户的 ApiKey 与平台配置。
+
+    飞书安全闸门：凡是会被 lark_cli 判定为 write/high-risk-write 的命令，在执行
+    **任何**工具之前先 interrupt() 暂停图，等前端用户确认后才放行。interrupt 放在
+    所有执行之前，是因为 resume 时节点会从头部重跑——若先执行了读操作，会重复执行。
     """
     last_msg = state["messages"][-1]
     if not hasattr(last_msg, "tool_calls") or not last_msg.tool_calls:
@@ -316,9 +320,29 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
     user_id = (config.get("configurable") or {}).get("user_id") or ""
     all_tools = await _get_all_tools(user_id)
     tool_map = {t.name: t for t in all_tools}
+    tool_calls = list(last_msg.tool_calls)
+
+    # 先扫描是否存在飞书写操作；找到首个写操作即中断等确认。
+    # resume 后 interrupt() 在同一位置返回前端传来的决策值（{"approved": bool}）。
+    decision = None
+    for tc in tool_calls:
+        if tc.get("name") != "lark_cli":
+            continue
+        command = (tc.get("args") or {}).get("command", "")
+        risk = await classify_risk(command)
+        if risk in ("write", "high-risk-write"):
+            decision = interrupt({
+                "type": "lark_write_confirmation",
+                "tool_call_id": tc.get("id"),
+                "command": command,
+                "risk": risk,
+            })
+            break
+
+    approved = isinstance(decision, dict) and decision.get("approved") is True
 
     results = []
-    for tc in last_msg.tool_calls:
+    for tc in tool_calls:
         tool_name = tc.get("name")
         tool_args = tc.get("args") or {}
         call_id = tc.get("id")
@@ -327,6 +351,23 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
         tool = tool_map.get(tool_name)
         if not tool:
             output = f"Error: Tool '{tool_name}' not found or not enabled."
+        elif tool_name == "lark_cli":
+            command = tool_args.get("command", "")
+            risk = await classify_risk(command)
+            if risk in ("write", "high-risk-write") and not approved:
+                output = (
+                    "用户未确认该飞书写操作，未执行任何变更。"
+                    "请向用户说明该操作已取消，并询问是否需要调整后重试。"
+                )
+            else:
+                invoke_args = dict(tool_args)
+                # high-risk-write 需 --yes 才会真正执行：用户确认即授权，这里补上
+                if risk == "high-risk-write":
+                    invoke_args["command"] = ensure_yes(command)
+                try:
+                    output = await tool.ainvoke(invoke_args, config=config)
+                except Exception as e:
+                    output = f"Error executing tool '{tool_name}': {e}"
         else:
             try:
                 output = await tool.ainvoke(tool_args, config=config)
