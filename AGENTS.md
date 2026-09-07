@@ -60,7 +60,7 @@ Pillow>=10.0
 - `main.py` — FastAPI 入口：组装应用、挂载静态资源、注册路由
 - `config.py` — 全局配置：`PLATFORMS`、`AVAILABLE_MODELS`、`MODES`、`.env` 加载（须最先 import）
 - `api/` — HTTP 层：路由（`routers/`）、请求体模型（`schemas.py`）、流式逻辑（`streaming.py`）
-- `agent/` — LangGraph 智能体：状态图（`graph.py`）、LLM 封装（`llm.py`）、prompt（`prompts.py`）、MCP（`mcp/`）、工具（`tools/`：weather / hotels / browser_use / lark_cli）
+- `agent/` — LangGraph 智能体：状态图（`graph.py`）、LLM 封装（`llm.py`）、prompt（`prompts.py`）、意图路由（`router.py`：关键词快速通道 + embedding 语义召回兜底）、MCP（`mcp/`）、工具（`tools/`：weather / hotels / browser_use / lark_cli）
 - `auth/` — 登录 / JWT / 依赖注入（`deps.py`）
 - `security/` — 加密：Fernet（`crypto.py`）、主密钥（`master_key.py`）、challenge
 - `store/` — SQLite 存取：`db.py`（连接与建表）+ 各领域 store
@@ -74,7 +74,7 @@ Pillow>=10.0
 
 **顶层**
 - `deploy/` — 部署脚本 + nginx + systemd + 证书（详见 `DEPLOY_ALIYUN.md`）
-- `docs/` — 架构图版本演进记录，**最新 = V1.5.0**（其余为历史版本）
+- `docs/` — 架构图版本演进记录，**最新 = V1.6.0**（其余为历史版本）
 - `data/` — `openunknown.db`（+ WAL/shm）、密钥文件、hotels 数据
 - `csv/` — `Seattle_Hotels.csv`（RAG 数据源）
 - `test/` — `test_mcp_server.py`
@@ -172,7 +172,8 @@ backend/
   │   ├── __init__.py
   │   ├── graph.py
   │   ├── llm.py
-  │   └── prompts.py
+  │   ├── prompts.py
+  │   └── router.py
   ├── api/
   │   ├── routers/
   │   │   ├── __init__.py

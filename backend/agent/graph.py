@@ -18,6 +18,7 @@ from typing_extensions import TypedDict
 from backend.agent.llm import get_llm
 from backend.agent.mcp import get_enabled_mcp_tools
 from backend.agent.prompts import IDENTITY_PROMPT, LARK_SECTION, SYSTEM_PROMPT
+from backend.agent.router import route_intents
 from backend.agent.tools import TOOLS as BUILTIN_TOOLS
 from backend.agent.tools.lark_cli import load_skill_descriptions
 from backend.config import (
@@ -50,41 +51,8 @@ def _tool_calls_this_turn(messages: list) -> int:
             count += 1
     return count
 
-# 关键词预筛：按用户当轮意图决定这一轮绑定哪些工具，避免闲聊也带上全部工具 schema。
-# 工具 schema 是每轮固定 token 大头（高德一家就 12 个），命中才绑，能显著降低底噪。
-_WEATHER_KWS = (
-    "天气", "气温", "温度", "下雨", "下雪", "降雨", "降温", "气候",
-    "冷不冷", "热不热", "多少度", "weather",
-)
-_MAP_KWS = (
-    "地图", "路线", "路况", "导航", "规划", "怎么走", "怎么去", "附近", "周边",
-    "位置", "坐标", "经纬", "距离", "多远", "骑行", "步行", "驾车", "开车",
-    "公交", "地铁", "打车", "高德", "地址", "在哪", "poi",
-)
-_FEISHU_KWS = (
-    "飞书", "lark", "文档", "docx", "wiki", "多维表格", "电子表格", "表格",
-    "sheet", "日历", "日程", "会议", "待办", "任务", "邮件", "邮箱",
-    "云盘", "云空间", "知识库", "妙记", "审批", "通讯录", "考勤",
-    "幻灯片", "画板", "okr", "feishu.cn", "larksuite",
-)
-_BROWSE_KWS = (
-    "网页", "网站", "网址", "链接", "打开网页", "浏览", "抓取", "爬取", "访问网页",
-    "上网", "在线", "互联网", "搜索", "检索", "搜一下", "搜索引擎", "热搜",
-    "新闻", "资讯", "最新消息", "web", "url", "http", "browse", "search", "fetch",
-    # 股票/财经类：无专门行情工具，统一路由到 browser_search 联网检索
-    "股票", "股价", "行情", "大盘", "上证", "深证", "涨跌", "涨幅", "跌幅",
-    "市值", "财报", "美股", "港股", "a股", "收盘", "开盘", "证券",
-)
-_HOTEL_KWS = (
-    "酒店", "hotel", "宾馆", "旅馆", "住宿", "民宿", "订房", "订酒店", "入住",
-    "房型", "西雅图", "seattle", "客房", "泳池", "健身房", "会议室", "含早",
-    "机场酒店", "海景", "套房", "前台", "退房",
-)
-
-
-def _hit(text: str, kws: tuple[str, ...]) -> bool:
-    """判断文本是否命中关键词组。"""
-    return any(k in text for k in kws)
+# 工具意图预筛已抽到 backend/agent/router.py：关键词快速通道 + embedding 语义召回兜底。
+# 这里只按 route_intents 的结果决定本轮绑定哪些工具，避免闲聊也带上全部工具 schema。
 
 
 def extract_text_content(content, mark_images: bool = True) -> str:
@@ -135,6 +103,17 @@ def _latest_user_text(messages: list) -> str:
     for msg in reversed(messages):
         if getattr(msg, "type", None) == "human":
             return extract_text_content(getattr(msg, "content", ""))
+    return ""
+
+
+def _prev_user_text(messages: list) -> str:
+    """取倒数第二条用户消息文本，用于短跟随消息继承上一轮意图。"""
+    seen = 0
+    for msg in reversed(messages):
+        if getattr(msg, "type", None) == "human":
+            seen += 1
+            if seen == 2:
+                return extract_text_content(getattr(msg, "content", ""))
     return ""
 
 
@@ -280,15 +259,13 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
     enable_thinking = mode_enables_thinking(mode)
     force_answer = _tool_calls_this_turn(state["messages"]) >= MAX_TOOL_CALLS
 
-    # 按本轮用户意图预筛工具，闲聊时不绑工具，省掉全部工具 schema 的固定 token
+    # 按本轮用户意图预筛工具：关键词命中零延迟直绑，未命中走 embedding 语义召回兜底
     user_text = _latest_user_text(state["messages"]).lower()
-    want = {
-        "weather": _hit(user_text, _WEATHER_KWS),
-        "map": _hit(user_text, _MAP_KWS),
-        "feishu": _hit(user_text, _FEISHU_KWS),
-        "browse": _hit(user_text, _BROWSE_KWS),
-        "hotel": _hit(user_text, _HOTEL_KWS),
-    }
+    want = await route_intents(
+        user_text,
+        api_key=api_key,
+        prev_user_text=_prev_user_text(state["messages"]),
+    )
     all_tools = await _get_all_tools(user_id)
     bound_tools = [] if force_answer else _select_tools(all_tools, user_text, want)
 
@@ -346,6 +323,7 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
         tool_args = tc.get("args") or {}
         call_id = tc.get("id")
 
+        logger.info("[工具] 调用 %s, 参数: %s", tool_name, tool_args)
         tool = tool_map.get(tool_name)
         if not tool:
             output = f"Error: Tool '{tool_name}' not found or not enabled."
@@ -354,6 +332,8 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
                 output = await tool.ainvoke(tool_args, config=config)
             except Exception as e:
                 output = f"Error executing tool '{tool_name}': {e}"
+        preview = str(output)[:300]
+        logger.info("[工具] %s 返回(前300字): %s", tool_name, preview)
 
         results.append(ToolMessage(content=str(output), tool_call_id=call_id, name=tool_name))
 
