@@ -40,11 +40,14 @@ def _content_to_json(content) -> object:
 
 
 def message_to_serializable(msg: BaseMessage) -> dict:
-    """把 LangChain 消息转成可落库的 dict（type/content/name/tool_calls/tool_call_id）。"""
+    """把 LangChain 消息转成可落库的 dict（id/type/content/name/tool_calls/tool_call_id）。"""
     data: dict = {
         "type": getattr(msg, "type", msg.__class__.__name__),
         "content": _content_to_json(getattr(msg, "content", "")),
     }
+    mid = getattr(msg, "id", None)
+    if mid:
+        data["id"] = mid
     name = getattr(msg, "name", None)
     if name:
         data["name"] = name
@@ -99,8 +102,32 @@ class TraceCollector:
 
     # ---- graph 侧写入 ----
     def record_llm_input(self, messages: list[BaseMessage]) -> None:
-        """记录本轮发给模型的完整原始报文（含 system，多模态图用占位符）。"""
-        self.messages = [message_to_serializable(m) for m in messages]
+        """记录最后一次提交给模型的完整报文（system + 压缩后的历史，多模态图用占位符）。
+
+        `_chat_node` 每次传入的都是「新建 system 消息 + 完整累计历史」，最后一次调用
+        已包含整轮全部报文，故采用覆盖式更新（以最新一次为准）。
+        内部按消息 id（tool 消息按 tool_call_id）去重，防御节点因 interrupt/重跑
+        而重复调用本方法时产生重复记录。
+        """
+        seen_ids: set[str] = set()
+        seen_tool_ids: set[str] = set()
+        result: list[dict] = []
+        for msg in messages:
+            ser = message_to_serializable(msg)
+            if ser.get("type") == "tool":
+                key = ser.get("tool_call_id")
+                if key and key in seen_tool_ids:
+                    continue
+                if key:
+                    seen_tool_ids.add(key)
+            else:
+                key = ser.get("id")
+                if key and key in seen_ids:
+                    continue
+                if key:
+                    seen_ids.add(key)
+            result.append(ser)
+        self.messages = result
 
     def record_tool_call(self, tool_call: dict) -> None:
         """记录模型发起的一次工具调用（id/name/args）。"""
