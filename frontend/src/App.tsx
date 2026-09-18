@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+import {
   deleteSessionRequest,
   fetchMcpServers,
   fetchModels,
@@ -24,19 +32,25 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import AuthOverlay from "./components/AuthOverlay";
 import Sidebar from "./components/Sidebar";
 import ChatView from "./components/ChatView";
+import TracesPanel from "./components/TracesPanel";
 import McpModal from "./components/McpModal";
 import SettingsModal from "./components/SettingsModal";
 
 export default function App() {
   return (
     <AuthProvider>
-      <AppShell />
+      <BrowserRouter>
+        <AppShell />
+      </BrowserRouter>
     </AuthProvider>
   );
 }
 
 function AppShell() {
   const { user, ready, logout } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isTraces = location.pathname === "/traces";
 
   const [models, setModels] = useState<ModelOption[]>([]);
   const [modes, setModes] = useState<ModeOption[]>([]);
@@ -133,12 +147,14 @@ function AppShell() {
   function selectSession(id: string) {
     setCurrentSessionId(id);
     localStorage.setItem(LS_SESSION, id);
+    navigate("/");
   }
 
   function newSession() {
     const id = newSessionId();
     setCurrentSessionId(id);
     localStorage.setItem(LS_SESSION, id);
+    navigate("/");
   }
 
   async function deleteSession(id: string) {
@@ -182,65 +198,92 @@ function AppShell() {
         hasApiKey={hasApiKey}
         mcpEnabledCount={mcpEnabledCount}
         mcpTotalCount={mcpServers.length}
+        view={isTraces ? "traces" : "chat"}
         onSelectSession={selectSession}
         onNewSession={newSession}
         onDeleteSession={(id) => void deleteSession(id)}
         onLogout={handleLogout}
         onOpenMcp={() => setMcpOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenTraces={() => navigate("/traces")}
       />
 
       <main>
         <header>
           <div>
-            <h1>OpenUnknown</h1>
-            <div className="sub">基于 LangGraph · 支持 MCP 扩展</div>
+            <h1>{isTraces ? "Trace 轨迹" : "OpenUnknown"}</h1>
+            <div className="sub">
+              {isTraces
+                ? "每次对话的完整运行轨迹 · 原始报文 / 工具调用 / 检索"
+                : "基于 LangGraph · 支持 MCP 扩展"}
+            </div>
           </div>
-          <div className="mode-picker">
-            <label htmlFor="modeSelect">模式</label>
-            <select
-              id="modeSelect"
-              value={currentMode}
-              onChange={(e) => {
-                setCurrentMode(e.target.value);
-                localStorage.setItem(LS_MODE, e.target.value);
-              }}
+          {!isTraces ? (
+            <>
+              <div className="mode-picker">
+                <label htmlFor="modeSelect">模式</label>
+                <select
+                  id="modeSelect"
+                  value={currentMode}
+                  onChange={(e) => {
+                    setCurrentMode(e.target.value);
+                    localStorage.setItem(LS_MODE, e.target.value);
+                  }}
+                >
+                  {modes.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="model-picker">
+                <label htmlFor="modelSelect">模型</label>
+                <select
+                  id="modelSelect"
+                  value={currentModel}
+                  onChange={(e) => {
+                    setCurrentModel(e.target.value);
+                    localStorage.setItem(LS_MODEL, e.target.value);
+                  }}
+                >
+                  {models.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          ) : null}
+          {isTraces ? (
+            <button
+              className="btn btn-secondary trace-toggle"
+              onClick={() => navigate("/")}
             >
-              {modes.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="model-picker">
-            <label htmlFor="modelSelect">模型</label>
-            <select
-              id="modelSelect"
-              value={currentModel}
-              onChange={(e) => {
-                setCurrentModel(e.target.value);
-                localStorage.setItem(LS_MODEL, e.target.value);
-              }}
-            >
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              返回对话
+            </button>
+          ) : null}
         </header>
 
-        <ChatView
-          sessionId={currentSessionId}
-          model={currentModel}
-          mode={currentMode}
-          modes={modes}
-          hasApiKey={hasApiKey}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onSettled={() => void refreshSessions()}
-        />
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <ChatView
+                sessionId={currentSessionId}
+                model={currentModel}
+                mode={currentMode}
+                modes={modes}
+                hasApiKey={hasApiKey}
+                onOpenSettings={() => setSettingsOpen(true)}
+                onSettled={() => void refreshSessions()}
+              />
+            }
+          />
+          <Route path="/traces" element={<TracesPanel />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
 
       <McpModal

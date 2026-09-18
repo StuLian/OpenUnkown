@@ -154,5 +154,64 @@ def get_conn() -> sqlite3.Connection:
             "CREATE INDEX IF NOT EXISTS idx_usage_log_user_created"
             " ON usage_log(user_id, created_at)"
         )
+        _conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS runs (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                model TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                prompt_version TEXT NOT NULL DEFAULT '',
+                platform TEXT NOT NULL DEFAULT '',
+                input_text TEXT NOT NULL DEFAULT '',
+                messages TEXT NOT NULL DEFAULT '[]',
+                tool_calls TEXT NOT NULL DEFAULT '[]',
+                tool_outputs TEXT NOT NULL DEFAULT '[]',
+                retrieved_docs TEXT NOT NULL DEFAULT '[]',
+                final_answer TEXT NOT NULL DEFAULT '',
+                usage TEXT NOT NULL DEFAULT '{}',
+                latency_ms REAL NOT NULL DEFAULT 0,
+                error TEXT,
+                flags TEXT NOT NULL DEFAULT '[]',
+                created_at REAL NOT NULL
+            )
+            """
+        )
+        _conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_runs_user_created"
+            " ON runs(user_id, created_at)"
+        )
+        _conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_id)"
+        )
+        # 迁移：为旧库 runs 表补充 prompt_version 列（存在则忽略）
+        try:
+            _conn.execute(
+                "ALTER TABLE runs ADD COLUMN prompt_version TEXT NOT NULL DEFAULT ''"
+            )
+        except sqlite3.OperationalError:
+            pass
+        _conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS feedback (
+                id TEXT PRIMARY KEY,
+                run_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                rating INTEGER NOT NULL DEFAULT 0,
+                tags TEXT NOT NULL DEFAULT '[]',
+                comment TEXT NOT NULL DEFAULT '',
+                created_at REAL NOT NULL
+            )
+            """
+        )
+        _conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_feedback_run ON feedback(run_id)"
+        )
+        _conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_feedback_user_created"
+            " ON feedback(user_id, created_at)"
+        )
         _conn.commit()
     return _conn

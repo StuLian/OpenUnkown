@@ -12,6 +12,9 @@ import type {
   McpTool,
   ModelOption,
   ModeOption,
+  FeedbackRecord,
+  RunDetail,
+  RunsPage,
   Session,
   SettingsInfo,
   User,
@@ -200,4 +203,39 @@ export function uploadFile(file: File): Promise<Attachment> {
   const form = new FormData();
   form.append("file", file);
   return apiJson<Attachment>("/api/files", { method: "POST", body: form });
+}
+
+// ===== trace（runs）与反馈 =====
+export interface RunsQuery {
+  flag?: string;
+  model?: string;
+  mode?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export function fetchRuns(query: RunsQuery = {}): Promise<RunsPage> {
+  const q = new URLSearchParams();
+  if (query.flag) q.set("flag", query.flag);
+  if (query.model) q.set("model", query.model);
+  if (query.mode) q.set("mode", query.mode);
+  if (query.limit) q.set("limit", String(query.limit));
+  if (query.offset) q.set("offset", String(query.offset));
+  return apiJson<RunsPage>(`/api/runs?${q.toString()}`);
+}
+
+export function fetchRunDetail(runId: string): Promise<RunDetail> {
+  return apiJson<RunDetail>(`/api/runs/${encodeURIComponent(runId)}`);
+}
+
+export function submitFeedback(
+  runId: string,
+  rating: number,
+  tags: string[],
+  comment = ""
+): Promise<FeedbackRecord> {
+  return apiJson<FeedbackRecord>(
+    `/api/runs/${encodeURIComponent(runId)}/feedback`,
+    jsonInit("POST", { rating, tags, comment })
+  );
 }

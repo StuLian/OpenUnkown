@@ -9,6 +9,7 @@ import { apiFetch } from "../api/client";
 import {
   fetchFileLimits,
   fetchSessionMessages,
+  submitFeedback,
   uploadFile,
 } from "../api/endpoints";
 import { readSseStream } from "../lib/sse";
@@ -38,6 +39,7 @@ interface Message {
   thinkingStatus?: ThinkingStatus;
   toolCalls?: ToolCall[];
   pendingConfirm?: { command: string; risk: string } | null;
+  runId?: string;
 }
 
 function uid(prefix: string): string {
@@ -246,6 +248,7 @@ function useChat({
     let usedModel = model;
     let usedMode = mode;
     let notice: string | null = null;
+    let runId: string | null = null;
 
     const patch = (p: Partial<Message>) =>
       setMessages((prev) =>
@@ -282,6 +285,10 @@ function useChat({
           }
           if (ev.usage) {
             usage = ev.usage;
+            continue;
+          }
+          if (ev.run_id) {
+            runId = ev.run_id;
             continue;
           }
           if (ev.model) {
@@ -378,6 +385,7 @@ function useChat({
       streaming: false,
       thinkingStatus: stopped ? "stopped" : "done",
       stopped,
+      runId: runId ?? undefined,
       meta: notice
         ? metaBase
           ? `⚠ ${notice} · ${metaBase}`
@@ -829,8 +837,103 @@ function MessageRow({
           {!message.streaming && !message.pendingConfirm ? (
             <CopyButton text={message.content} />
           ) : null}
+          {!message.streaming && !message.pendingConfirm && message.runId ? (
+            <FeedbackBar runId={message.runId} />
+          ) : null}
         </div>
       </div>
     </>
+  );
+}
+
+const FEEDBACK_TAGS: { value: string; label: string }[] = [
+  { value: "hallucination", label: "幻觉" },
+  { value: "tool_error", label: "工具异常" },
+  { value: "irrelevant", label: "答非所问" },
+  { value: "bad", label: "差评" },
+];
+
+function FeedbackBar({ runId }: { runId: string }) {
+  const [status, setStatus] = useState<"idle" | "picking" | "done" | "error">(
+    "idle"
+  );
+  const [picked, setPicked] = useState<string[]>([]);
+  const [comment, setComment] = useState("");
+
+  async function submit(rating: number, tags: string[]) {
+    try {
+      await submitFeedback(runId, rating, tags, comment);
+      setStatus("done");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  if (status === "done") {
+    return <div className="feedback-bar done">已记录反馈，感谢你的帮助</div>;
+  }
+  if (status === "error") {
+    return <div className="feedback-bar error">反馈提交失败，请重试</div>;
+  }
+
+  if (status === "picking") {
+    return (
+      <div className="feedback-bar picking">
+        <span className="feedback-label">问题标签：</span>
+        {FEEDBACK_TAGS.map((t) => (
+          <button
+            key={t.value}
+            className={"feedback-tag" + (picked.includes(t.value) ? " active" : "")}
+            onClick={() =>
+              setPicked((prev) =>
+                prev.includes(t.value)
+                  ? prev.filter((x) => x !== t.value)
+                  : [...prev, t.value]
+              )
+            }
+          >
+            {t.label}
+          </button>
+        ))}
+        <input
+          className="feedback-comment"
+          placeholder="补充说明（可选）"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+        />
+        <button
+          className="btn btn-primary feedback-submit"
+          onClick={() => void submit(-1, picked)}
+        >
+          提交
+        </button>
+        <button
+          className="btn btn-secondary feedback-cancel"
+          onClick={() => setStatus("idle")}
+        >
+          取消
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="feedback-bar">
+      <span className="feedback-label">这个回答有帮助吗？</span>
+      <button className="feedback-btn" title="有帮助" onClick={() => void submit(1, [])}>
+        👍
+      </button>
+      <button
+        className="feedback-btn"
+        title="有问题"
+        onClick={() => {
+          setPicked(["bad"]);
+          setComment("");
+          setStatus("picking");
+        }}
+      >
+        👎
+      </button>
+    </div>
   );
 }

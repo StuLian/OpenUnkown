@@ -29,3 +29,9 @@ data/openunknown.db-wal
 # 依赖与构建产物均不入库；frontend/dist 由 deploy_local.sh 在本地构建后随部署包上传
 frontend/node_modules/
 frontend/dist/
+
+project-intro
+project-intro-v2
+data/eval_reports
+todo-list
+frontend/.npm-cache/

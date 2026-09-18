@@ -12,6 +12,7 @@ export interface StreamEvent {
   tool_result?: { id: string; tool: string; output?: string };
   confirm?: { command: string; risk: string; tool_call_id: string };
   usage?: Usage;
+  run_id?: string;
 }
 
 /**

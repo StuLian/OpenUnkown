@@ -1,0 +1,86 @@
+{
+  "description": "西雅图酒店 RAG 评测集：query 与人工标注的最相关酒店名（golden）。用于计算 recall@k / MRR / nDCG@k，评估混合检索 + 重排的召回准确率。relevant 为「最相关」的黄金标准（非全部相关），query 措辞尽量具体使 golden 能排进 top-k。",
+  "default_top_k": 5,
+  "queries": [
+    {
+      "query": "西雅图机场附近有免费班车的酒店",
+      "relevant": ["Seattle Airport Marriott", "Hilton Seattle Airport & Conference Center", "Crowne Plaza Seattle Airport", "Radisson Hotel Seattle Airport", "DoubleTree by Hilton Hotel Seattle Airport"],
+      "note": "机场 + 班车"
+    },
+    {
+      "query": "西雅图海滨能看海景的酒店",
+      "relevant": ["Seattle Marriott Waterfront", "The Edgewater Hotel Seattle"],
+      "note": "海滨 / waterfront"
+    },
+    {
+      "query": "带室内游泳池的西雅图酒店",
+      "relevant": ["Fairmont Olympic Hotel", "Embassy Suites by Hilton Seattle Downtown Pioneer Square", "Courtyard by Marriott Seattle Downtown/Pioneer Square", "Holiday Inn Express & Suites Seattle-City Center"],
+      "note": "室内泳池"
+    },
+    {
+      "query": "能办会议或活动的酒店",
+      "relevant": ["Hilton Seattle Airport & Conference Center", "Hilton Seattle", "Seattle Marriott Waterfront", "Hilton Garden Seattle Downtown"],
+      "note": "会议设施"
+    },
+    {
+      "query": "含免费早餐的酒店",
+      "relevant": ["Staybridge Suites Seattle - Fremont", "Home2 Suites by Hilton Seattle Airport", "Staybridge Suites Seattle Downtown - Lake Union"],
+      "note": "免费早餐"
+    },
+    {
+      "query": "允许携带宠物入住的酒店",
+      "relevant": ["Red Roof Inn Seattle Airport - SEATAC", "Graduate Seattle", "Renaissance Seattle Hotel", "Courtyard by Marriott Seattle Downtown/Pioneer Square"],
+      "note": "宠物友好"
+    },
+    {
+      "query": "西雅图精品设计风格酒店",
+      "relevant": ["Kimpton Hotel Monaco Seattle", "The Paramount Hotel Seattle", "Thompson Seattle", "Hotel Sorrento", "MarQueen Hotel"],
+      "note": "精品 / boutique"
+    },
+    {
+      "query": "历史建筑风格的西雅图酒店",
+      "relevant": ["Mayflower Park Hotel", "MarQueen Hotel", "Ballard Inn", "Kimpton Alexis Hotel"],
+      "note": "历史 / historic"
+    },
+    {
+      "query": "派克市场旁边的酒店",
+      "relevant": ["Inn at the Market", "Four Seasons Hotel Seattle", "Thompson Seattle"],
+      "note": "派克市场 / Pike Place"
+    },
+    {
+      "query": "太空针塔附近可以看塔景的酒店",
+      "relevant": ["Pan Pacific Seattle", "Hyatt Place Seattle", "Holiday Inn Seattle Downtown"],
+      "note": "太空针塔 / Space Needle"
+    },
+    {
+      "query": "联合湖附近的酒店",
+      "relevant": ["Silver Cloud Inn - Seattle Lake Union", "Residence Inn by Marriott Seattle Downtown/Lake Union", "EVEN Hotel Seattle - South Lake Union", "Staybridge Suites Seattle Downtown - Lake Union"],
+      "note": "联合湖 / Lake Union"
+    },
+    {
+      "query": "先锋广场历史区的酒店",
+      "relevant": ["Best Western Plus Pioneer Square Hotel Downtown", "Embassy Suites by Hilton Seattle Downtown Pioneer Square", "Courtyard by Marriott Seattle Downtown/Pioneer Square"],
+      "note": "先锋广场 / Pioneer Square"
+    },
+    {
+      "query": "西雅图市中心的酒店",
+      "relevant": ["Hilton Garden Seattle Downtown", "Crowne Plaza Seattle Downtown", "Kimpton Hotel Monaco Seattle", "The Westin Seattle", "Hilton Seattle"],
+      "note": "市中心 / downtown"
+    },
+    {
+      "query": "靠近亚马逊总部或南湖联盟的商务酒店",
+      "relevant": ["EVEN Hotel Seattle - South Lake Union", "Residence Inn by Marriott Seattle Downtown/Lake Union", "Hilton Garden Seattle Downtown"],
+      "note": "南湖联盟 / SLU / 亚马逊"
+    },
+    {
+      "query": "带餐厅可以吃早中晚餐的酒店",
+      "relevant": ["Hilton Garden Seattle Downtown", "Four Seasons Hotel Seattle", "Seattle Marriott Waterfront", "Fairmont Olympic Hotel"],
+      "note": "餐厅"
+    },
+    {
+      "query": "西雅图机场附近的酒店",
+      "relevant": ["Seattle Airport Marriott", "Hilton Seattle Airport & Conference Center", "Crowne Plaza Seattle Airport", "Radisson Hotel Seattle Airport", "DoubleTree by Hilton Hotel Seattle Airport", "Red Lion Hotel Seattle Airport Sea-Tac"],
+      "note": "机场"
+    }
+  ]
+}

@@ -7,12 +7,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import APP_NAME
-from backend.api.routers import auth, chat, files, mcp, sessions, settings, usage
+from backend.api.routers import auth, chat, files, mcp, runs, sessions, settings, usage
 
 app = FastAPI(title=APP_NAME)
 
@@ -33,11 +33,30 @@ app.include_router(sessions.router)
 app.include_router(mcp.router)
 app.include_router(settings.router)
 app.include_router(usage.router)
+app.include_router(runs.router)
 
 
 @app.get("/")
 def index() -> Response:
     """返回 React 前端入口；未构建时给出明确提示。"""
+    index_file = FRONTEND_DIST / "index.html"
+    if not index_file.exists():
+        return PlainTextResponse(
+            "前端尚未构建：请在 frontend/ 目录执行 `npm install && npm run build` 后重启服务。",
+            status_code=503,
+        )
+    return FileResponse(index_file)
+
+
+@app.get("/{full_path:path}")
+def spa_fallback(full_path: str) -> Response:
+    """SPA 前端路由兜底：/api、/assets 之外的路径返回 index.html。
+
+    前端用 react-router（如 /traces）时，直接访问或刷新会打到后端，
+    这里把非接口路径统一回退到 React 入口，交由前端路由接管。
+    """
+    if full_path.startswith("api/") or full_path.startswith("assets/"):
+        raise HTTPException(status_code=404, detail="Not Found")
     index_file = FRONTEND_DIST / "index.html"
     if not index_file.exists():
         return PlainTextResponse(

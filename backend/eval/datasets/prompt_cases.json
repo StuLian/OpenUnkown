@@ -1,0 +1,25 @@
+{
+  "description": "prompt 结构回归检查：每一层必须包含的关键规则短语。防止重构/裁剪时误删关键行为约束（诚实、工具纪律、格式约定、引用编号模板）。",
+  "checks": [
+    {
+      "section": "persona",
+      "label": "身份/人设层",
+      "must_contain": ["智能助手", "诚实"]
+    },
+    {
+      "section": "behavior",
+      "label": "行为层（诚实/工具纪律）",
+      "must_contain": ["如实说明", "不要编造", "不要虚构工具名", "基于工具实际返回"]
+    },
+    {
+      "section": "output_format",
+      "label": "输出格式层",
+      "must_contain": ["Markdown", "mermaid"]
+    },
+    {
+      "section": "context",
+      "label": "信息补充层（RAG 引用模板）",
+      "must_contain": ["参考资料", "如实说明", "标注编号"]
+    }
+  ]
+}

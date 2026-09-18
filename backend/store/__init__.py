@@ -3,6 +3,7 @@
 对外统一通过 ``from backend import store`` 使用，这里重新导出各子模块的公共函数。
 """
 from backend.store.db import get_conn
+from backend.store.feedback import insert_feedback, list_feedback_for_run
 from backend.store.mcp import (
     delete_mcp_server,
     get_mcp_server,
@@ -11,6 +12,7 @@ from backend.store.mcp import (
     save_mcp_server,
     toggle_mcp_server,
 )
+from backend.store.runs import count_runs, get_run, insert_run, list_runs
 from backend.store.sessions import (
     create_session,
     delete_session,
@@ -53,4 +55,10 @@ __all__ = [
     "list_user_platforms",
     "log_usage",
     "usage_stats",
+    "insert_run",
+    "list_runs",
+    "count_runs",
+    "get_run",
+    "insert_feedback",
+    "list_feedback_for_run",
 ]

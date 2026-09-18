@@ -95,3 +95,15 @@ class LoginRequest(BaseModel):
     username: str
     password_ciphertext: str
     nonce: str
+
+
+class FeedbackRequest(BaseModel):
+    """用户对某轮回答的反馈请求体（run_id 从路径参数取）。
+
+    rating：1 赞 / -1 踩 / 0 中性；
+    tags：问题标签，如 hallucination(幻觉)/tool_error(工具异常)/irrelevant(答非所问)/bad(差评)。
+    """
+
+    rating: int = 0
+    tags: list[str] = []
+    comment: str = ""

@@ -127,3 +127,84 @@ export interface AuthResponse {
   token: string;
   user: User;
 }
+
+// ===== trace（runs）与反馈 =====
+
+export interface RunSummary {
+  id: string;
+  session_id: string;
+  model: string;
+  mode: string;
+  input_text: string;
+  final_answer_preview: string;
+  latency_ms: number;
+  error: string | null;
+  flags: string[];
+  feedback_count: number;
+  created_at: number;
+}
+
+export interface TraceToolCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
+export interface TraceMessage {
+  type: string;
+  content: string | unknown;
+  name?: string;
+  tool_calls?: TraceToolCall[];
+  tool_call_id?: string;
+}
+
+export interface ToolOutputRecord {
+  id: string;
+  name: string;
+  output: string;
+}
+
+export interface RetrievedDoc {
+  name: string;
+  address: string;
+  desc: string;
+  score: number;
+}
+
+export interface FeedbackRecord {
+  id: string;
+  run_id: string;
+  user_id: string;
+  rating: number;
+  tags: string[];
+  comment: string;
+  created_at: number;
+}
+
+export interface RunDetail {
+  id: string;
+  session_id: string;
+  model: string;
+  mode: string;
+  platform: string;
+  prompt_version: string;
+  input_text: string;
+  messages: TraceMessage[];
+  tool_calls: TraceToolCall[];
+  tool_outputs: ToolOutputRecord[];
+  retrieved_docs: RetrievedDoc[];
+  final_answer: string;
+  usage: Usage;
+  latency_ms: number;
+  error: string | null;
+  flags: string[];
+  created_at: number;
+  feedback: FeedbackRecord[];
+}
+
+export interface RunsPage {
+  runs: RunSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}

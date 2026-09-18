@@ -49,4 +49,7 @@ def search_hotels(query: str, top_k: int = 5, config: RunnableConfig = None) -> 
     cfg = (config or {}).get("configurable") or {}
     api_key = cfg.get("api_key") or ""
     results = _rag_search_hotels(query, top_k=top_k, api_key=api_key)
+    collector = cfg.get("trace_collector")
+    if collector is not None:
+        collector.record_retrieved_docs(results)
     return _format_result(results)

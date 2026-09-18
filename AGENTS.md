@@ -1,7 +1,7 @@
 # AGENTS.md — OpenUnknown 项目上下文（给 AI 看）
 
 > 本文件是给 AI 的「项目地图」：新会话开始先读本文件即可快速上手，不必重新逐个探索目录。
-> 最后更新：2026-09-07（结构有变时**务必同步更新本文件**，尤其是模块职责、命令、约定三节）。
+> 最后更新：2026-09-16（结构有变时**务必同步更新本文件**，尤其是模块职责、命令、约定三节）。
 
 ## 1. 一句话概述
 
@@ -48,7 +48,7 @@ openpyxl>=3.1.0
 Pillow>=10.0
 ```
 
-**前端 dependencies**：mermaid ^11.17.2, react ^18.3.1, react-dom ^18.3.1, react-markdown ^10.1.0, remark-breaks ^4.0.0, remark-gfm ^4.0.1
+**前端 dependencies**：mermaid ^11.17.2, react ^18.3.1, react-dom ^18.3.1, react-markdown ^10.1.0, react-router-dom ^6.30.6, remark-breaks ^4.0.0, remark-gfm ^4.0.1
 **前端 devDependencies**：@types/react ^18.3.12, @types/react-dom ^18.3.1, @vitejs/plugin-react ^4.3.4, typescript ^5.6.3, vite ^5.4.11
 <!-- /AUTO-GEN:DEPS -->
 
@@ -63,9 +63,11 @@ Pillow>=10.0
 - `agent/` — LangGraph 智能体：状态图（`graph.py`）、LLM 封装（`llm.py`）、prompt（`prompts.py`）、意图路由（`router.py`：关键词快速通道 + embedding 语义召回兜底）、MCP（`mcp/`）、工具（`tools/`：weather / hotels / browser_use / lark_cli）
 - `auth/` — 登录 / JWT / 依赖注入（`deps.py`）
 - `security/` — 加密：Fernet（`crypto.py`）、主密钥（`master_key.py`）、challenge
-- `store/` — SQLite 存取：`db.py`（连接与建表）+ 各领域 store
+- `store/` — SQLite 存取：`db.py`（连接与建表）+ 各领域 store（sessions / mcp / users / usage / runs / feedback）
 - `rag/` — 酒店 RAG：loader / index / bm25 / embeddings / rerank / location
 - `files/` — 附件解析（图片/文档）与上传
+- `tracing/` — trace 采集：`collector.py`（`TraceCollector` 在一轮对话中收集原始报文/工具调用/召回，供落库与 Trace 轨迹复盘）
+- `eval/` — 离线评测：`metrics.py`（recall@k/MRR/nDCG）、`rag_eval.py`（RAG 评测）、`prompt_eval.py`（prompt 结构回归）+ `datasets/`（评测集）
 
 **前端 `frontend/`**
 - `src/` — React 组件（`components/`）、认证上下文（`context/`）、api client / sse / crypto / storage（`lib/`、`api/`）、类型（`types.ts`）
@@ -97,6 +99,10 @@ OPEN_BROWSER=0 ./dev.sh         # 不自动开浏览器
 npm install && npm run build    # 构建到 frontend/dist（直接跑 uvicorn 前必须先 build）
 npm run dev                     # 仅前端，/api 代理到 8000
 npm run typecheck               # 类型检查
+
+# 离线评测（RAG 评测需 ApiKey；prompt 检查免费）
+.venv/bin/python -m backend.eval.prompt_eval                 # prompt 结构回归检查
+EVAL_API_KEY=<key> .venv/bin/python -m backend.eval.rag_eval # RAG 检索评测（recall@k/MRR/nDCG）
 ```
 
 ## 5. 后端 API 路由表（自动生成，勿手改）
@@ -122,6 +128,9 @@ npm run typecheck               # 类型检查
 | `/api/mcp` | PATCH | `/servers/{server_id}/toggle` | mcp.py |
 | `/api/mcp` | POST | `/test` | mcp.py |
 | `/api/mcp` | POST | `/import` | mcp.py |
+| `/api/runs` | GET | `(空)` | runs.py |
+| `/api/runs` | GET | `/{run_id}` | runs.py |
+| `/api/runs` | POST | `/{run_id}/feedback` | runs.py |
 | `/api/sessions` | GET | `(空)` | sessions.py |
 | `/api/sessions` | POST | `(空)` | sessions.py |
 | `/api/sessions` | DELETE | `/{session_id}` | sessions.py |
@@ -140,11 +149,12 @@ npm run typecheck               # 类型检查
 1. **`frontend/dist/` 不入库**：由 `deploy/deploy_local.sh` 本地构建后随部署包上传。本地直接跑 uvicorn 前先 `npm run build`；服务器无需 Node。
 2. **模型 ApiKey 无兜底**：不读环境变量、不读本地文件。登录后用户在「模型设置」填写，Fernet 加密存 `user_api_keys` 表，DEK 用服务端主密钥包裹存 `users.dek_ciphertext`（信封加密）。未配置的用户后端 `/api/chat` 直接返回错误。
 3. **`.env` 加载点在 `backend/config.py`**：`load_dotenv` 必须位于任何第三方库 import 之前（尤其 dashscope 在 import 时会固化 api_key）。新增环境变量走 `.env`（`cp .env.example .env`，`.env` 已 gitignore）。
-4. **数据库**：SQLite 单例连接 + `threading.Lock` 串行访问，WAL 模式。表：`sessions`、`mcp_servers`、`users`、`user_api_keys`、`usage_log`；checkpoint 表（`checkpoints`/`writes`）由 `SqliteSaver` 自管。建表逻辑集中在 `store/db.py` 的 `get_conn()`，含幂等迁移。
+4. **数据库**：SQLite 单例连接 + `threading.Lock` 串行访问，WAL 模式。表：`sessions`、`mcp_servers`、`users`、`user_api_keys`、`usage_log`、`runs`（每轮 trace）、`feedback`（用户反馈）；checkpoint 表（`checkpoints`/`writes`）由 `SqliteSaver` 自管。建表逻辑集中在 `store/db.py` 的 `get_conn()`，含幂等迁移。
 5. **扩展模型平台**：在 `config.py` 的 `PLATFORMS` 加条目即可；模型/模式白名单也在 `config.py`（`AVAILABLE_MODELS`/`MODES`），前后端共用。
 6. **LangGraph 结构**：`get_graph()` 构建 `StateGraph(MessagesState)`，节点 `chat` ⇄ `tools`，`START→chat`，工具调用后回到 chat。工具按需注入（weather/hotels/browser_use/lark_cli/MCP）。
 7. **飞书集成**：`agent/tools/lark_cli.py` 调用 `lark-cli`，system prompt 只注入短 domain 路由表，子命令由模型 `--help` 按需拉取。**写操作安全闸门**：tools 节点用 `interrupt()` 对 `write`/`high-risk-write` 命令先暂停，前端弹确认卡片，用户点「确认执行」后经 `POST /api/chat/confirm` 恢复执行（`high-risk-write` 确认后由 `ensure_yes()` 自动补 `--yes`）；`read` 直接放行。读写判定在 `classify_risk()`，以 `lark-cli <cmd> --help` 的 `Risk:` 行为权威信号并缓存，未知兜底为写。
 8. **LangSmith**：纯环境变量自动追踪，无埋点代码；tags=`openunknown`/`model:*`/`mode:*`。
+9. **Trace 轨迹**：每轮对话经 `tracing/collector.py` 的 `TraceCollector`（挂在 `config.configurable["trace_collector"]`）收集原始报文/工具调用/召回，由 `streaming.py` 落 `runs` 表并自动打 flag（`tool_error`/`no_answer`/`error`/`pending_confirm`）；用户反馈落 `feedback` 表。Trace 轨迹面板后端 `api/routers/runs.py`，前端 `TracesPanel.tsx`。trace 落库失败只告警、不影响主流程。
 
 ## 7. 维护说明
 
@@ -185,6 +195,7 @@ backend/
   │   │   ├── chat.py
   │   │   ├── files.py
   │   │   ├── mcp.py
+  │   │   ├── runs.py
   │   │   ├── sessions.py
   │   │   ├── settings.py
   │   │   └── usage.py
@@ -196,6 +207,15 @@ backend/
   │   ├── deps.py
   │   ├── service.py
   │   └── tokens.py
+  ├── eval/
+  │   ├── datasets/
+  │   │   ├── prompt_cases.json
+  │   │   └── rag_hotels.json
+  │   ├── __init__.py
+  │   ├── metrics.py
+  │   ├── prompt_eval.py
+  │   ├── rag_eval.py
+  │   └── report.py
   ├── files/
   │   ├── __init__.py
   │   ├── image.py
@@ -216,10 +236,15 @@ backend/
   ├── store/
   │   ├── __init__.py
   │   ├── db.py
+  │   ├── feedback.py
   │   ├── mcp.py
+  │   ├── runs.py
   │   ├── sessions.py
   │   ├── usage.py
   │   └── users.py
+  ├── tracing/
+  │   ├── __init__.py
+  │   └── collector.py
   ├── __init__.py
   ├── config.py
   └── main.py
@@ -233,8 +258,10 @@ frontend/src/
   │   ├── Markdown.tsx
   │   ├── McpModal.tsx
   │   ├── Modal.tsx
+  │   ├── RunDetail.tsx
   │   ├── SettingsModal.tsx
-  │   └── Sidebar.tsx
+  │   ├── Sidebar.tsx
+  │   └── TracesPanel.tsx
   ├── context/
   │   └── AuthContext.tsx
   ├── lib/

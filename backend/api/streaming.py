@@ -11,6 +11,8 @@ from langgraph.types import Command
 
 from backend import store
 from backend.agent.graph import extract_image_urls, extract_text_content, get_graph
+from backend.agent.prompts import PROMPT_VERSION
+from backend.tracing import TraceCollector
 from backend.auth.service import resolve_api_key
 from backend.config import DEFAULT_PLATFORM, VISION_MODEL, mode_enables_thinking
 from backend.files.image import ocr_image
@@ -22,6 +24,14 @@ logger = logging.getLogger(__name__)
 def sse_event(payload: dict) -> str:
     """把数据打包成一条 SSE 消息。"""
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _persist_trace(collector: TraceCollector) -> None:
+    """把一轮 trace 落库；落库失败只告警，不影响主流程。"""
+    try:
+        store.insert_run(collector.finalize())
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[trace] 落库失败: %s", e)
 
 
 def message_to_dict(m) -> dict | None:
@@ -100,17 +110,21 @@ def _build_config(
     mode: str,
     api_key: str,
     username: str,
+    collector: TraceCollector | None = None,
 ) -> dict:
     """组装 LangGraph 运行配置（/chat 与 /chat/confirm 共用）。"""
+    configurable = {
+        "thread_id": store.thread_id_for(user_id, session_id),
+        "model": model,
+        "mode": mode,
+        "platform": DEFAULT_PLATFORM,
+        "api_key": api_key,
+        "user_id": user_id,
+    }
+    if collector is not None:
+        configurable["trace_collector"] = collector
     return {
-        "configurable": {
-            "thread_id": store.thread_id_for(user_id, session_id),
-            "model": model,
-            "mode": mode,
-            "platform": DEFAULT_PLATFORM,
-            "api_key": api_key,
-            "user_id": user_id,
-        },
+        "configurable": configurable,
         # LangSmith 元信息：tags 便于过滤，metadata 便于在控制台按字段检索。
         "tags": ["openunknown", f"user:{user_id}", f"model:{model}", f"mode:{mode}"],
         "metadata": {
@@ -175,9 +189,11 @@ async def _stream_turn(
     """跑完一轮图并产出 SSE 事件 dict（不含 model/mode/notice 头与 [DONE]）。
 
     飞书写操作在 tools 节点被 interrupt 停住时，产出 confirm 事件且不产 usage；
-    整轮正常结束时产出 usage（并落 usage_log）。
+    整轮正常结束时产出 usage（并落 usage_log）；无论何种结束都落一条 run trace。
     """
+    collector = (config.get("configurable") or {}).get("trace_collector")
     usage = None
+    answer = ""
     try:
         async for chunk, meta in graph.astream(
             stream_input, config=config, stream_mode="messages"
@@ -236,19 +252,31 @@ async def _stream_turn(
             # 工具调用阶段 content 可能是空串或非字符串，只把最终自然语言增量推给前端
             text = getattr(chunk, "content", None)
             if isinstance(text, str) and text:
+                answer += text
                 yield {"delta": text}
     except Exception as exc:  # noqa: BLE001
         yield {"error": str(exc)}
+        if collector is not None:
+            collector.set_error(str(exc))
 
     # 图若停在飞书写操作待确认处，产出 confirm 事件；此时轮次未完成，不产 usage。
     confirm = await _pending_confirm(graph, config)
     if confirm is not None:
+        if collector is not None:
+            collector.set_pending_confirm()
         yield {"confirm": confirm}
 
     if usage:
         store.log_usage(user_id, session_id, model, mode, usage)
         if confirm is None:
             yield {"usage": usage}
+
+    # 落 trace：正常结束、异常、停在确认处都落一条 run，供 Trace 轨迹面板复盘。
+    if collector is not None:
+        collector.set_answer(answer)
+        if usage:
+            collector.set_usage(usage)
+        _persist_trace(collector)
 
 
 async def stream_answer(message: str, session_id: str, model: str, mode: str, user_id: str, request: Request, attachments: list | None = None):
@@ -308,7 +336,18 @@ async def stream_answer(message: str, session_id: str, model: str, mode: str, us
         effective_mode = "fast"
 
     graph = await get_graph()
-    config = _build_config(user_id, session_id, effective_model, effective_mode, api_key, username)
+    collector = TraceCollector(
+        user_id=user_id,
+        session_id=session_id,
+        model=effective_model,
+        mode=effective_mode,
+        platform=DEFAULT_PLATFORM,
+        input_text=message,
+        prompt_version=PROMPT_VERSION,
+    )
+    config = _build_config(
+        user_id, session_id, effective_model, effective_mode, api_key, username, collector
+    )
 
     # 上一轮若残留未确认的飞书写操作（用户中途刷新/切换会话），先自动取消，避免阻塞本轮
     await _drain_pending_confirm(graph, config, request)
@@ -327,6 +366,7 @@ async def stream_answer(message: str, session_id: str, model: str, mode: str, us
     inputs = {"messages": [*attach_msgs, human_message]}
 
     yield sse_event({"model": effective_model, "mode": effective_mode})
+    yield sse_event({"run_id": collector.id})
     if effective_model != model:
         yield sse_event({"notice": f"本条消息包含图片，已切换视觉模型 {effective_model} 处理"})
 
@@ -364,7 +404,18 @@ async def resume_answer(
     username = user["username"] if user else user_id
 
     graph = await get_graph()
-    config = _build_config(user_id, session_id, model, mode, api_key, username)
+    collector = TraceCollector(
+        user_id=user_id,
+        session_id=session_id,
+        model=model,
+        mode=mode,
+        platform=DEFAULT_PLATFORM,
+        input_text="[飞书写操作确认恢复]",
+        prompt_version=PROMPT_VERSION,
+    )
+    config = _build_config(user_id, session_id, model, mode, api_key, username, collector)
+
+    yield sse_event({"run_id": collector.id})
 
     async for ev in _stream_turn(
         graph,

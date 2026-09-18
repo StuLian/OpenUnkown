@@ -18,7 +18,7 @@ from typing_extensions import TypedDict
 
 from backend.agent.llm import get_llm
 from backend.agent.mcp import get_enabled_mcp_tools
-from backend.agent.prompts import IDENTITY_PROMPT, LARK_SECTION, SYSTEM_PROMPT
+from backend.agent.prompts import IDENTITY_PROMPT, LARK_SECTION, build_system_prompt
 from backend.agent.router import route_intents
 from backend.agent.tools import TOOLS as BUILTIN_TOOLS
 from backend.agent.tools.lark_cli import classify_risk, ensure_yes, load_skill_descriptions
@@ -205,7 +205,7 @@ _lark_domain_list: str | None = None
 async def _get_system_prompt(include_lark: bool) -> str:
     """用模板组装 system prompt；仅命中飞书意图时追加 domain 短目录。"""
     global _lark_domain_list
-    base = SYSTEM_PROMPT.format(app_name=APP_NAME)
+    base = build_system_prompt(APP_NAME)
     if not include_lark:
         return base
     if _lark_domain_list is None:
@@ -252,6 +252,7 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
     本轮工具调用次数达到上限后不再绑定工具，强制模型直接作答，保证图一定能收敛。
     """
     cfg = config.get("configurable") or {}
+    collector = cfg.get("trace_collector")
     model_name = cfg.get("model") or DEFAULT_MODEL
     mode = cfg.get("mode") or DEFAULT_MODE
     platform = cfg.get("platform") or DEFAULT_PLATFORM
@@ -289,6 +290,8 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
             content="已连续调用多次工具仍未得到最终答案。现在必须停止调用工具，"
             "直接基于已获取的信息给出最终回答，不要再次调用任何工具。"
         ))
+    if collector is not None:
+        collector.record_llm_input(messages)
     logger.info(
         "[LLM 输入] 历史压缩 %d 字 -> %d 字（checkpoint 原文未改）；本轮绑定工具 %d/%d；模式=%s(思考=%s)",
         _messages_chars(state["messages"]),
@@ -317,7 +320,9 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
     if not hasattr(last_msg, "tool_calls") or not last_msg.tool_calls:
         return {"messages": []}
 
-    user_id = (config.get("configurable") or {}).get("user_id") or ""
+    cfg = config.get("configurable") or {}
+    collector = cfg.get("trace_collector")
+    user_id = cfg.get("user_id") or ""
     all_tools = await _get_all_tools(user_id)
     tool_map = {t.name: t for t in all_tools}
     tool_calls = list(last_msg.tool_calls)
@@ -375,6 +380,10 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
                 output = f"Error executing tool '{tool_name}': {e}"
         preview = str(output)[:300]
         logger.info("[工具] %s 返回(前300字): %s", tool_name, preview)
+
+        if collector is not None:
+            collector.record_tool_call(tc)
+            collector.record_tool_output(call_id, tool_name, str(output))
 
         results.append(ToolMessage(content=str(output), tool_call_id=call_id, name=tool_name))
 
