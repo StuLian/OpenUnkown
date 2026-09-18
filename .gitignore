@@ -28,11 +28,11 @@ data/openunknown.db-wal
 # ===== 前端（React/Vite）=====
 # 依赖与构建产物均不入库；frontend/dist 由 deploy_local.sh 在本地构建后随部署包上传
 frontend/node_modules/
+frontend/.npm-cache/
 frontend/dist/
 
+
+eval_reports
 project-intro
 project-intro-v2
-data/eval_reports
 todo-list
-frontend/.npm-cache/
-test
