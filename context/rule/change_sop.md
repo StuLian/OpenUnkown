@@ -3,6 +3,13 @@
 > 本文件定义「从需求进来到 commit 沉淀」的完整流程。各模板按需加载：
 > 写前 → `proposal.md`；写中 → `coding.md`；打灯 → `review.md`；记录 → 本目录其余模板。
 
+## 时间戳约定（精确到秒）
+
+- 人类可读：`YYYY-MM-DD HH:MM:SS`（本地时区），用于报告 / 修复记录 / 台账正文。
+- 目录与变更 ID（无冒号，跨平台安全）：`YYYYMMDD-HHMMSS`。
+- 变更 ID = `YYYYMMDD-HHMMSS-功能名`，取「变更发起」时刻（proposal 阶段生成；历史补录取代码 commit 时间）。
+- 时间一律用真实执行时间（`git log` 的 commit 时间或生成时刻），不凭记忆编造。
+
 ## 0. 入口判断
 - 变更类型：新功能 / bug 修复 / 轻量修改
 - 分级：轻量（免 proposal）/ 标准 / 高风险（安全/加密/DB/并发/删除旧行为）
@@ -29,7 +36,7 @@
 
 ## 4. 提交与沉淀（人 commit 之后）
 - 4.1 回填 commit hash 到 feature.md
-- 4.2 追加一行到 `context/risk-ledger.md`（变更ID/日期/功能/风险/黄红/hash）
+- 4.2 追加一行到 `context/risk-ledger.md`（变更ID/时间(秒级)/功能/风险/黄红/hash）
 - 4.3 若触发校准 → 回写 `review.md` / `coding.md`
 
 ## 5. 完成
