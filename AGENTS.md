@@ -1,7 +1,7 @@
 # AGENTS.md — OpenUnknown 项目上下文（给 AI 看）
 
 > 本文件是给 AI 的「项目地图」：新会话开始先读本文件即可快速上手，不必重新逐个探索目录。
-> 最后更新：2026-09-16（结构有变时**务必同步更新本文件**，尤其是模块职责、命令、约定三节）。
+> 最后更新：2026-09-18（结构有变时**务必同步更新本文件**，尤其是模块职责、命令、约定三节）。
 
 ## 1. 一句话概述
 
@@ -82,6 +82,7 @@ Pillow>=10.0
 - `data/` — `openunknown.db`（+ WAL/shm）、密钥文件、hotels 数据
 - `csv/` — `Seattle_Hotels.csv`（RAG 数据源）
 - `test/` — `test_mcp_server.py`
+- `context/` — AI 协作纪律体系：`rule/`（编码约束 / 评审标准 / 收尾 SOP / 模板）+ `version/`（每次变更记录）+ `risk-ledger.md`（风险台账），详见第 6 节第 10 条
 - `dev.sh` — 一键开发环境（后端 reload + 前端 HMR）
 - `README.md` — 给人看的使用/部署文档
 
@@ -155,6 +156,18 @@ EVAL_API_KEY=<key> .venv/bin/python -m backend.eval.rag_eval # RAG 检索评测�
 7. **飞书集成**：`agent/tools/lark_cli.py` 调用 `lark-cli`，system prompt 只注入短 domain 路由表，子命令由模型 `--help` 按需拉取。**写操作安全闸门**：tools 节点用 `interrupt()` 对 `write`/`high-risk-write` 命令先暂停，前端弹确认卡片，用户点「确认执行」后经 `POST /api/chat/confirm` 恢复执行（`high-risk-write` 确认后由 `ensure_yes()` 自动补 `--yes`）；`read` 直接放行。读写判定在 `classify_risk()`，以 `lark-cli <cmd> --help` 的 `Risk:` 行为权威信号并缓存，未知兜底为写。
 8. **LangSmith**：纯环境变量自动追踪，无埋点代码；tags=`openunknown`/`model:*`/`mode:*`。
 9. **Trace 轨迹**：每轮对话经 `tracing/collector.py` 的 `TraceCollector`（挂在 `config.configurable["trace_collector"]`）收集原始报文/工具调用/召回，由 `streaming.py` 落 `runs` 表并自动打 flag（`tool_error`/`no_answer`/`error`/`pending_confirm`）；用户反馈落 `feedback` 表。Trace 轨迹面板后端 `api/routers/runs.py`，前端 `TracesPanel.tsx`。trace 落库失败只告警、不影响主流程。
+10. **AI 开发纪律（规则路由表）**：AI 协作规则分「常驻」与「按需」两类，按动作触发读取：
+    | 动作/时机 | 必读文件 | 说明 |
+    |-----------|---------|------|
+    | 写代码前 | `context/rule/coding.md` | 编码硬约束（架构/目录/≤300行/依据/【推理生成】标注） |
+    | 产出 proposal 前 | `context/rule/proposal.md` | 写前确认单模板 |
+    | 变更收尾 | `context/rule/change_sop.md` | 全流程 SOP |
+    | 打灯/评审 | `context/rule/review.md` | 红黄绿判定 + 绿灯门槛 |
+    | 修 bug 前 | `context/risk-ledger.md` + 对应 `version/` | 历史回溯 |
+    铁律（最高优先级，任何情况下不可跳过）：
+    1. 非轻量变更先出 proposal 获人确认，未获批不写代码；
+    2. 修 bug 必须先做历史回溯；
+    3. 写完代码必须走收尾流程（`change_sop.md`）。
 
 ## 7. 维护说明
 
