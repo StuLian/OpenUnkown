@@ -60,4 +60,4 @@ cd frontend && npm run typecheck / build   ->  通过
 - `agent/context.py` / `api/messages.py` 是否收进包（待人工定性）
 
 ## commit
-- hash：（待人提交后回填）
+- hash：`3ec2619003ab98a7298d707ba9a8829a9b7dce2f`（短 `3ec2619`，2026-09-20 23:19:53）
