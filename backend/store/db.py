@@ -213,5 +213,23 @@ def get_conn() -> sqlite3.Connection:
             "CREATE INDEX IF NOT EXISTS idx_feedback_user_created"
             " ON feedback(user_id, created_at)"
         )
+        _conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS memories (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                session_id TEXT,
+                kind TEXT NOT NULL,
+                content TEXT NOT NULL,
+                embedding TEXT,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            )
+            """
+        )
+        _conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_memories_user_kind"
+            " ON memories(user_id, kind)"
+        )
         _conn.commit()
     return _conn

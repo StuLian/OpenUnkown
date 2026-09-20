@@ -12,6 +12,16 @@ from backend.store.mcp import (
     save_mcp_server,
     toggle_mcp_server,
 )
+from backend.store.memory import (
+    add_fact,
+    count_facts,
+    delete_all_facts,
+    delete_fact,
+    delete_fact_owned,
+    list_facts,
+    load_summary,
+    save_summary,
+)
 from backend.store.runs import count_runs, get_run, insert_run, list_runs
 from backend.store.sessions import (
     create_session,
@@ -61,4 +71,12 @@ __all__ = [
     "get_run",
     "insert_feedback",
     "list_feedback_for_run",
+    "save_summary",
+    "load_summary",
+    "add_fact",
+    "list_facts",
+    "count_facts",
+    "delete_fact",
+    "delete_fact_owned",
+    "delete_all_facts",
 ]

@@ -13,6 +13,7 @@ import type {
   ModelOption,
   ModeOption,
   FeedbackRecord,
+  MemoryFact,
   RunDetail,
   RunsPage,
   Session,
@@ -238,4 +239,21 @@ export function submitFeedback(
     `/api/runs/${encodeURIComponent(runId)}/feedback`,
     jsonInit("POST", { rating, tags, comment })
   );
+}
+
+// ===== 长期记忆（查看 / 删除）=====
+export function fetchMemories(): Promise<{ facts: MemoryFact[]; total: number }> {
+  return apiJson<{ facts: MemoryFact[]; total: number }>("/api/memory");
+}
+
+export function deleteMemoryRequest(factId: string): Promise<{ ok: boolean }> {
+  return apiJson<{ ok: boolean }>(`/api/memory/${encodeURIComponent(factId)}`, {
+    method: "DELETE",
+  });
+}
+
+export function clearMemoriesRequest(): Promise<{ ok: boolean; deleted: number }> {
+  return apiJson<{ ok: boolean; deleted: number }>("/api/memory", {
+    method: "DELETE",
+  });
 }

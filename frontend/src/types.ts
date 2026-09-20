@@ -152,6 +152,8 @@ export interface TraceToolCall {
 
 export interface TraceMessage {
   type: string;
+  /** 逻辑标记：如 "memory"（记忆注入段），前端优先用它作为 tag 展示。 */
+  kind?: string;
   content: string | unknown;
   name?: string;
   tool_calls?: TraceToolCall[];
@@ -207,4 +209,11 @@ export interface RunsPage {
   total: number;
   limit: number;
   offset: number;
+}
+
+/** 长期记忆（事实）：系统在对话中自动记住的关于用户的稳定信息。 */
+export interface MemoryFact {
+  id: string;
+  content: string;
+  created_at: number;
 }

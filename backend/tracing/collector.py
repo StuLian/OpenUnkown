@@ -40,11 +40,18 @@ def _content_to_json(content) -> object:
 
 
 def message_to_serializable(msg: BaseMessage) -> dict:
-    """把 LangChain 消息转成可落库的 dict（id/type/content/name/tool_calls/tool_call_id）。"""
+    """把 LangChain 消息转成可落库的 dict（id/type/kind/content/name/tool_calls/tool_call_id）。
+
+    消息带 additional_kwargs.kind（如记忆注入的 "memory"）时一并落库，
+    供 Trace 轨迹详情以独立 tag 展示（与普通 system 区分）。
+    """
     data: dict = {
         "type": getattr(msg, "type", msg.__class__.__name__),
         "content": _content_to_json(getattr(msg, "content", "")),
     }
+    kind = (getattr(msg, "additional_kwargs", None) or {}).get("kind")
+    if kind:
+        data["kind"] = kind
     mid = getattr(msg, "id", None)
     if mid:
         data["id"] = mid

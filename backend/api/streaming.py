@@ -1,22 +1,26 @@
 """SSE 流式回答的公共逻辑：消息打包、消息转字典、流式生成。"""
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 
 from fastapi import Request
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 from langgraph.types import Command
 
 from backend import store
-from backend.agent.graph import extract_image_urls, extract_text_content, get_graph
+from backend.agent.graph import get_graph
+from backend.agent.memory import schedule_extraction
 from backend.agent.prompts import PROMPT_VERSION
+from backend.api.messages import build_attachment_messages, message_to_dict
 from backend.tracing import TraceCollector
 from backend.auth.service import resolve_api_key
-from backend.config import DEFAULT_PLATFORM, VISION_MODEL, mode_enables_thinking
-from backend.files.image import ocr_image
-from backend.files.parser import MAX_CONTENT_CHARS
+from backend.config import (
+    DEFAULT_PLATFORM,
+    VISION_MODEL,
+    get_platform,
+    mode_enables_thinking,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,75 +36,6 @@ def _persist_trace(collector: TraceCollector) -> None:
         store.insert_run(collector.finalize())
     except Exception as e:  # noqa: BLE001
         logger.warning("[trace] 落库失败: %s", e)
-
-
-def message_to_dict(m) -> dict | None:
-    """把 LangChain 消息对象转成前端可用的 {role, content, usage?, images?}。
-
-    工具调用相关的中间消息不展示：tool 消息、以及仅包含 tool_calls 没有正文的 assistant 消息。
-    assistant 消息若携带 usage_metadata，则附上 token 用量，供前端刷新后仍能展示。
-    多模态消息中的图片单独提取为 images 数组，供前端在气泡里渲染。
-    """
-    if m.type in ("system", "tool"):
-        return None
-    content = extract_text_content(m.content, mark_images=False)
-    if m.type == "ai" and getattr(m, "tool_calls", None) and not content.strip():
-        return None
-    role = {"human": "user", "ai": "assistant"}.get(m.type, m.type)
-    images = extract_image_urls(m.content)
-    if role not in ("user", "assistant") or (not content and not images):
-        return None
-    result = {"role": role, "content": content}
-    if images:
-        result["images"] = images
-    attach_names = (getattr(m, "additional_kwargs", None) or {}).get("attachment_names") or []
-    if attach_names:
-        result["attachments"] = attach_names
-    usage_metadata = getattr(m, "usage_metadata", None)
-    if usage_metadata:
-        try:
-            result["usage"] = {
-                "input_tokens": usage_metadata.get("input_tokens", 0),
-                "output_tokens": usage_metadata.get("output_tokens", 0),
-                "total_tokens": usage_metadata.get("total_tokens", 0),
-            }
-        except Exception:
-            pass
-    return result
-
-
-def _split_attachments(attachments: list) -> tuple[list[SystemMessage], list[tuple[str, str]], list[str]]:
-    """把附件拆成三类，返回 (文本系统消息列表, 图片列表[(文件名, data_url)], 附件名列表)。
-
-    - 文本附件 → SystemMessage（正文不进入用户气泡，历史回显时被过滤）；
-    - 图片附件 → 只收集 data URL，OCR 延迟到发送时（见 stream_answer）再执行。
-    """
-    text_msgs: list[SystemMessage] = []
-    images: list[tuple[str, str]] = []
-    names: list[str] = []
-    for i, att in enumerate(attachments, 1):
-        file_type = (getattr(att, "file_type", None) or "text")
-        filename = (getattr(att, "filename", None) or "未命名文件")
-        names.append(filename)
-
-        if file_type == "image":
-            data_url = getattr(att, "image", None) or ""
-            if data_url:
-                images.append((filename, data_url))
-        else:
-            content = getattr(att, "content", None) or ""
-            # 后端兜底截断，防止绕过前端直接提交超长内容
-            if len(content) > MAX_CONTENT_CHARS:
-                content = content[:MAX_CONTENT_CHARS] + "\n...[内容过长已截断]"
-            text_msgs.append(
-                SystemMessage(
-                    content=(
-                        f"[附件 {i}] 用户上传了文件《{filename}》，其解析后的纯文本内容如下，"
-                        f"请结合这些内容回答用户问题：\n\n{content}"
-                    )
-                )
-            )
-    return text_msgs, images, names
 
 
 def _build_config(
@@ -120,6 +55,7 @@ def _build_config(
         "platform": DEFAULT_PLATFORM,
         "api_key": api_key,
         "user_id": user_id,
+        "session_id": session_id,
     }
     if collector is not None:
         configurable["trace_collector"] = collector
@@ -277,6 +213,15 @@ async def _stream_turn(
         if usage:
             collector.set_usage(usage)
         _persist_trace(collector)
+        # 长记忆抽取放后台执行：不阻塞本次响应、失败静默（记忆是增强，不阻塞主流程）。
+        cfg = config.get("configurable") or {}
+        schedule_extraction(
+            cfg.get("user_id") or "",
+            collector.input_text,
+            answer,
+            cfg.get("api_key") or "",
+            get_platform(cfg.get("platform") or DEFAULT_PLATFORM)["base_url"],
+        )
 
 
 async def stream_answer(message: str, session_id: str, model: str, mode: str, user_id: str, request: Request, attachments: list | None = None):
@@ -303,30 +248,10 @@ async def stream_answer(message: str, session_id: str, model: str, mode: str, us
     user = store.get_user_by_id(user_id)
     username = user["username"] if user else user_id
 
-    # 附件：文本正文以 system 消息注入；图片收集 data URL。
-    # OCR 延迟到此刻（用户已真正发送）才执行，避免上传时无谓调用模型。
-    text_msgs, images, attach_names = _split_attachments(attachments or [])
-    attach_msgs: list[SystemMessage] = list(text_msgs)
-    image_urls = [url for _, url in images]
-
-    if images:
-        ocr_results = await asyncio.gather(
-            *(ocr_image(url, api_key) for _, url in images),
-            return_exceptions=True,
-        )
-        for (img_name, _), result in zip(images, ocr_results):
-            if isinstance(result, BaseException):
-                logger.warning("图片 OCR 失败 %s: %s", img_name, result)
-                continue
-            if result:
-                attach_msgs.append(
-                    SystemMessage(
-                        content=(
-                            f"[图片] 图片《{img_name}》经 OCR 提取的文字如下，"
-                            f"请结合图片与这段文字回答用户问题：\n\n{result}"
-                        )
-                    )
-                )
+    # 附件：文本正文 + 图片 OCR 文字，组装成注入用 SystemMessage（OCR 延迟到此刻执行）。
+    attach_msgs, image_urls, attach_names = await build_attachment_messages(
+        attachments or [], api_key
+    )
 
     # 图片附件需要多模态模型：切换视觉模型，并关闭思考（多数视觉模型不支持 enable_thinking）
     effective_model = model

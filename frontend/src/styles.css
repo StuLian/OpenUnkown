@@ -84,6 +84,8 @@ aside.sidebar {
 }
 .mcp-entry-btn:hover { border-color: var(--accent); background: var(--panel-2); }
 .mcp-entry-btn.active { border-color: var(--accent); background: var(--panel-2); }
+/* 入口按钮：图标靠左（与上下入口对齐），标题文字居中 */
+.mcp-entry-btn.centered > .mcp-label { flex: 1; text-align: center; }
 .mcp-icon { font-size: 14px; color: var(--accent); display: inline-flex; align-items: center; }
 .mcp-count-badge {
   background: rgba(108,140,255,0.2); color: var(--accent);
@@ -772,11 +774,11 @@ input:checked + .slider:before { transform: translateX(14px); background-color: 
 
 /* 设置（模型服务 ApiKey） */
 .sidebar-footer .mcp-entry-btn + .mcp-entry-btn { margin-top: 8px; }
-.settings-status-dot {
+.status-dot {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--muted); flex-shrink: 0;
 }
-.settings-status-dot.on { background: var(--green); box-shadow: 0 0 6px rgba(95, 207, 128, 0.6); }
+.status-dot.on { background: var(--green); box-shadow: 0 0 6px rgba(95, 207, 128, 0.6); }
 .modal-dialog-sm { max-width: 460px; }
 .settings-form { display: flex; flex-direction: column; gap: 14px; }
 .key-input-wrap { display: flex; gap: 8px; align-items: stretch; }
@@ -794,9 +796,8 @@ input:checked + .slider:before { transform: translateX(14px); background-color: 
   background: var(--panel-2); border: 1px solid var(--border);
   border-radius: 8px; padding: 10px 12px;
 }
-.usage-box {
-  background: var(--panel-2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 12px;
+/* 用量统计弹窗（已独立成左下角入口；原嵌在设置弹窗内的 .usage-box 已废弃） */
+.usage-modal {
   font-size: 12px; color: var(--muted); line-height: 1.6;
   display: flex; flex-direction: column; gap: 8px;
 }
@@ -1032,6 +1033,10 @@ input:checked + .slider:before { transform: translateX(14px); background-color: 
   background: rgba(108, 140, 255, 0.15); color: var(--accent);
   border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: 600;
 }
+.trace-msg-type.memory {
+  background: rgba(138, 108, 255, 0.18); color: #b9a6ff;
+  border: 1px solid rgba(138, 108, 255, 0.45);
+}
 .trace-msg-name { color: var(--muted); }
 .trace-msg-len { margin-left: auto; color: var(--muted); font-size: 11px; }
 .trace-msg .trace-pre { margin: 0 8px 8px; }
@@ -1062,3 +1067,23 @@ input:checked + .slider:before { transform: translateX(14px); background-color: 
 .retrieved-bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin-top: 8px; }
 .retrieved-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 3px; }
 .retrieved-item.top .retrieved-bar-fill { background: linear-gradient(90deg, var(--green), var(--accent)); }
+
+/* ===== 我的记忆（设置弹窗内的查看/删除） ===== */
+.memory-box {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.memory-head { display: flex; align-items: center; justify-content: space-between; }
+.memory-title { font-size: 13px; font-weight: 600; }
+.memory-empty { color: var(--muted); font-size: 12.5px; padding: 12px 0; text-align: center; }
+.memory-error { color: var(--red); font-size: 12.5px; padding: 12px 0; text-align: center; }
+.memory-list {
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: 220px; overflow-y: auto;
+}
+.memory-item {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px;
+}
+.memory-text { flex: 1; font-size: 12.5px; line-height: 1.5; word-break: break-word; }
+.memory-time { color: var(--muted); font-size: 11px; white-space: nowrap; }

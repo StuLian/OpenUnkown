@@ -6,6 +6,7 @@ const FLAG_LABELS: Record<string, string> = {
   tool_error: "工具异常",
   no_answer: "无答案",
   pending_confirm: "待确认",
+  memory_injected: "注入记忆",
   hallucination: "幻觉",
   irrelevant: "答非所问",
   bad: "差评",
@@ -40,7 +41,9 @@ function MessageCard({ msg, index }: { msg: RunDetailData["messages"][number]; i
   return (
     <details className="trace-msg" open={index === 0}>
       <summary>
-        <span className="trace-msg-type">{msg.type}</span>
+        <span className={"trace-msg-type" + (msg.kind ? ` ${msg.kind}` : "")}>
+          {msg.kind ?? msg.type}
+        </span>
         {msg.name ? <span className="trace-msg-name">{msg.name}</span> : null}
         <span className="trace-msg-len">{contentText.length} 字</span>
       </summary>

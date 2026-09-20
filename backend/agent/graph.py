@@ -16,6 +16,11 @@ from langgraph.prebuilt import tools_condition
 from langgraph.types import interrupt
 from typing_extensions import TypedDict
 
+from backend.agent.context import (
+    assemble_model_messages,
+    extract_text_content,
+    log_llm_input,
+)
 from backend.agent.llm import get_llm
 from backend.agent.mcp import get_enabled_mcp_tools
 from backend.agent.prompts import IDENTITY_PROMPT, LARK_SECTION, build_system_prompt
@@ -54,49 +59,6 @@ def _tool_calls_this_turn(messages: list) -> int:
 
 # 工具意图预筛已抽到 backend/agent/router.py：关键词快速通道 + embedding 语义召回兜底。
 # 这里只按 route_intents 的结果决定本轮绑定哪些工具，避免闲聊也带上全部工具 schema。
-
-
-def extract_text_content(content, mark_images: bool = True) -> str:
-    """从消息内容（str 或多模态块列表）提取纯文本。
-
-    多模态 HumanMessage 的 content 是 [{type:text,text:...}, {type:image_url,...}]
-    这样的块列表，直接 str() 会带出超长 base64，这里只保留文本部分。
-    mark_images=True 时图片块用「[图片]」占位（用于意图识别/日志/字数统计）；
-    用于界面回显时可传 False，避免和真正渲染出来的图片重复。
-    """
-    if isinstance(content, str):
-        return content
-    parts: list[str] = []
-    for block in content or []:
-        if not isinstance(block, dict):
-            parts.append(str(block))
-            continue
-        if block.get("type") == "text":
-            parts.append(str(block.get("text", "")))
-        elif block.get("type") == "image_url":
-            if mark_images:
-                parts.append("[图片]")
-        else:
-            parts.append(str(block))
-    return " ".join(parts)
-
-
-def extract_image_urls(content) -> list[str]:
-    """从多模态消息内容中提取所有图片 URL（data URL 或 http(s)）。"""
-    if isinstance(content, str):
-        return []
-    urls: list[str] = []
-    for block in content or []:
-        if not isinstance(block, dict) or block.get("type") != "image_url":
-            continue
-        image_url = block.get("image_url")
-        if isinstance(image_url, dict):
-            url = image_url.get("url", "")
-        else:
-            url = image_url
-        if isinstance(url, str) and url:
-            urls.append(url)
-    return urls
 
 
 def _latest_user_text(messages: list) -> str:
@@ -161,43 +123,6 @@ def _select_tools(tools: list, text: str, want: dict) -> list:
     return selected
 
 
-# 发给模型时：尾部消息保持原文（覆盖当前工具轮），更早的超长工具结果截断。
-# 不改 checkpoint，只压缩本轮 LLM 输入。
-_KEEP_TAIL = 16
-_OLD_TOOL_CHARS = 240
-
-
-def _compact_history(messages: list) -> list:
-    """压缩历史中的旧工具原文，避免长对话每轮把全部工具返回再送给模型。"""
-    if len(messages) <= _KEEP_TAIL:
-        return list(messages)
-
-    head, tail = messages[:-_KEEP_TAIL], messages[-_KEEP_TAIL:]
-    compacted = []
-    for msg in head:
-        if getattr(msg, "type", None) != "tool":
-            compacted.append(msg)
-            continue
-        content = msg.content if isinstance(msg.content, str) else str(msg.content)
-        if len(content) <= _OLD_TOOL_CHARS:
-            compacted.append(msg)
-            continue
-        compacted.append(ToolMessage(
-            content=content[:_OLD_TOOL_CHARS] + f"\n...(已截断，原文 {len(content)} 字)",
-            tool_call_id=msg.tool_call_id,
-            name=getattr(msg, "name", None),
-        ))
-    return compacted + list(tail)
-
-
-def _messages_chars(messages: list) -> int:
-    """粗算消息文本总字数，便于日志对比压缩效果。"""
-    total = 0
-    for msg in messages:
-        total += len(extract_text_content(getattr(msg, "content", "")))
-    return total
-
-
 # 飞书 domain 列表缓存（纯数据行，仅加载一次）
 _lark_domain_list: str | None = None
 
@@ -213,30 +138,6 @@ async def _get_system_prompt(include_lark: bool) -> str:
     if not _lark_domain_list:
         return base
     return base + "\n" + LARK_SECTION.format(domain_list=_lark_domain_list)
-
-
-def _log_llm_input(model_name: str, messages: list, tool_names: list[str]) -> None:
-    """把本轮发给大模型的提示词打印到服务日志，方便核对。"""
-    lines = [
-        "",
-        "=" * 72,
-        f"[LLM 输入] 模型={model_name}  消息数={len(messages)}  约 { _messages_chars(messages) } 字  绑定工具={tool_names}",
-        "=" * 72,
-    ]
-    for i, msg in enumerate(messages):
-        role = getattr(msg, "type", msg.__class__.__name__)
-        name = getattr(msg, "name", None) or ""
-        content = extract_text_content(getattr(msg, "content", ""))
-        header = f"[{i}] {role}" + (f" ({name})" if name else "")
-        lines.append(header)
-        lines.append(content if content else "(空)")
-        if getattr(msg, "tool_calls", None):
-            lines.append(f"  tool_calls: {msg.tool_calls}")
-        lines.append("-" * 40)
-    lines.append("=" * 72)
-    text = "\n".join(lines)
-    logger.info(text)
-    print(text, flush=True)
 
 
 async def _get_all_tools(user_id: str):
@@ -258,6 +159,7 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
     platform = cfg.get("platform") or DEFAULT_PLATFORM
     api_key = cfg.get("api_key") or ""
     user_id = cfg.get("user_id") or ""
+    session_id = cfg.get("session_id") or ""
     enable_thinking = mode_enables_thinking(mode)
     force_answer = _tool_calls_this_turn(state["messages"]) >= MAX_TOOL_CALLS
 
@@ -283,25 +185,35 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
     # 身份指令合并进首条系统提示（放历史之前），避免成为最后一条消息干扰模型作答
     # （此前放在历史末尾，视觉模型会把它当成当前任务，回答成「我是什么模型」）。
     identity_text = IDENTITY_PROMPT.format(model_name=model_name)
-    history = _compact_history(list(state["messages"]))
-    messages = [SystemMessage(content=f"{system_prompt}\n\n{identity_text}"), *history]
-    if force_answer:
-        messages.append(SystemMessage(
-            content="已连续调用多次工具仍未得到最终答案。现在必须停止调用工具，"
-            "直接基于已获取的信息给出最终回答，不要再次调用任何工具。"
-        ))
+    # 记忆注入（滚动摘要 + 长记忆召回）与历史压缩统一在 context 层完成。
+    # 记忆是独立的 kind=memory 消息，与基础 system 分开；DashScope 兼容接口实测
+    # 支持多条/任意位置的 system（全部在册模型 200 OK），故直接原样发送，
+    # trace 记录的就是真实报文、不做任何合并（保真）。
+    messages, mem_info = await assemble_model_messages(
+        state_messages=list(state["messages"]),
+        system_prompt=system_prompt,
+        identity_text=identity_text,
+        user_id=user_id,
+        session_id=session_id,
+        query=_latest_user_text(state["messages"]),
+        api_key=api_key,
+        base_url=get_platform(platform)["base_url"],
+        force_answer=force_answer,
+    )
     if collector is not None:
+        if mem_info.get("memory_injected"):
+            collector.add_flag("memory_injected")
         collector.record_llm_input(messages)
     logger.info(
-        "[LLM 输入] 历史压缩 %d 字 -> %d 字（checkpoint 原文未改）；本轮绑定工具 %d/%d；模式=%s(思考=%s)",
-        _messages_chars(state["messages"]),
-        _messages_chars(history),
+        "[LLM 输入] 本轮绑定工具 %d/%d；模式=%s(思考=%s)；注入记忆=%s 触发摘要=%s",
         len(bound_tools),
         len(all_tools),
         mode,
         enable_thinking,
+        mem_info.get("memory_injected"),
+        mem_info.get("summarized"),
     )
-    _log_llm_input(model_name, messages, [t.name for t in bound_tools])
+    log_llm_input(model_name, messages, [t.name for t in bound_tools])
     response = await llm.ainvoke(messages)
     return {"messages": [response]}
 

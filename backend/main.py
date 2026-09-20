@@ -12,7 +12,17 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import APP_NAME
-from backend.api.routers import auth, chat, files, mcp, runs, sessions, settings, usage
+from backend.api.routers import (
+    auth,
+    chat,
+    files,
+    mcp,
+    memory,
+    runs,
+    sessions,
+    settings,
+    usage,
+)
 
 app = FastAPI(title=APP_NAME)
 
@@ -34,6 +44,7 @@ app.include_router(mcp.router)
 app.include_router(settings.router)
 app.include_router(usage.router)
 app.include_router(runs.router)
+app.include_router(memory.router)
 
 
 @app.get("/")

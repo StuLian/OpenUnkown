@@ -8,6 +8,7 @@ const FLAG_LABELS: Record<string, string> = {
   tool_error: "工具异常",
   no_answer: "无答案",
   pending_confirm: "待确认",
+  memory_injected: "注入记忆",
   hallucination: "幻觉",
   irrelevant: "答非所问",
   bad: "差评",
@@ -15,6 +16,7 @@ const FLAG_LABELS: Record<string, string> = {
 
 const FLAG_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "全部" },
+  { value: "memory_injected", label: "注入记忆" },
   { value: "tool_error", label: "工具异常" },
   { value: "no_answer", label: "无答案" },
   { value: "error", label: "错误" },

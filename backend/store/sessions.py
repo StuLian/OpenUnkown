@@ -6,6 +6,7 @@ LangGraph checkpoint 的 thread_id 用 ``{user_id}:{session_id}`` 做命名空�
 """
 from __future__ import annotations
 
+import sqlite3
 import time
 
 from backend.store.db import _lock, get_conn
@@ -83,8 +84,22 @@ def delete_session(user_id: str, session_id: str) -> bool:
         )
         if cur.rowcount > 0:
             tid = thread_id_for(user_id, session_id)
-            # AsyncSqliteSaver 建的表(checkpoints / writes)，按命名空间后的 thread_id 清理
+            # AsyncSqliteSaver 建的表(checkpoints / writes)，按命名空间后的 thread_id 清理。
+            # 全新库可能还没建这两张表（用户未跑过图），此时忽略即可——否则会抛错导致
+            # 整个删除失败（前端看到 500），且后续的记忆级联清理永远执行不到（B1 修复）。
             for tbl in ("checkpoints", "writes"):
-                conn.execute(f"DELETE FROM {tbl} WHERE thread_id = ?", (tid,))
+                try:
+                    conn.execute(f"DELETE FROM {tbl} WHERE thread_id = ?", (tid,))
+                except sqlite3.OperationalError as e:
+                    # 只吞「表不存在」（全新库）；其它 OperationalError（如 database is locked）照常上抛
+                    if "no such table" not in str(e).lower():
+                        raise
+            # 级联清理该会话的滚动摘要，避免留下孤儿行；fact 是跨会话长期记忆，
+            # 不随会话删除而消失，故只清 kind='summary'。此处已持有 _lock，直接执行 SQL。
+            conn.execute(
+                "DELETE FROM memories"
+                " WHERE user_id = ? AND session_id = ? AND kind = 'summary'",
+                (user_id, session_id),
+            )
         conn.commit()
     return cur.rowcount > 0

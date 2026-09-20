@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from backend import store
 from backend.agent.graph import get_graph
-from backend.api.streaming import message_to_dict
+from backend.api.messages import message_to_dict
 from backend.auth.deps import get_current_user_id
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])

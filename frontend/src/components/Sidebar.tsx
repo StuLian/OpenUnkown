@@ -15,6 +15,10 @@ interface SidebarProps {
   onOpenMcp: () => void;
   onOpenSettings: () => void;
   onOpenTraces: () => void;
+  onOpenMemory: () => void;
+  onOpenUsage: () => void;
+  memoryCount: number;
+  usageCount: number;
 }
 
 export default function Sidebar({
@@ -32,6 +36,10 @@ export default function Sidebar({
   onOpenMcp,
   onOpenSettings,
   onOpenTraces,
+  onOpenMemory,
+  onOpenUsage,
+  memoryCount,
+  usageCount,
 }: SidebarProps) {
   return (
     <aside className="sidebar">
@@ -86,19 +94,60 @@ export default function Sidebar({
             退出
           </button>
         </div>
-        <button className="mcp-entry-btn" onClick={onOpenMcp}>
-          <span className="mcp-icon">⚙</span>
-          <span>MCP 扩展管理</span>
-          <span className="mcp-count-badge">
-            {mcpEnabledCount}/{mcpTotalCount}
-          </span>
-        </button>
         <button className="mcp-entry-btn" onClick={onOpenSettings}>
           <span className="mcp-icon">⛭</span>
           <span>模型设置</span>
           <span
-            className={"settings-status-dot" + (hasApiKey ? " on" : "")}
+            className={"status-dot" + (hasApiKey ? " on" : "")}
             title={hasApiKey ? "已配置 ApiKey" : "未配置 ApiKey"}
+          />
+        </button>
+        <button className="mcp-entry-btn centered" onClick={onOpenUsage}>
+          <span className="mcp-icon">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="6" y1="20" x2="6" y2="16" />
+              <line x1="12" y1="20" x2="12" y2="10" />
+              <line x1="18" y1="20" x2="18" y2="4" />
+            </svg>
+          </span>
+          <span className="mcp-label">用量统计</span>
+          <span
+            className={"status-dot" + (usageCount > 0 ? " on" : "")}
+            title={usageCount > 0 ? `已调用 ${usageCount} 次` : "暂无调用记录"}
+          />
+        </button>
+        <button className="mcp-entry-btn centered" onClick={onOpenMemory}>
+          <span className="mcp-icon">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <ellipse cx="12" cy="5" rx="9" ry="3" />
+              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+            </svg>
+          </span>
+          <span className="mcp-label">我的记忆</span>
+          <span
+            className={"status-dot" + (memoryCount > 0 ? " on" : "")}
+            title={memoryCount > 0 ? `已记住 ${memoryCount} 条` : "暂无长期记忆"}
           />
         </button>
         <button
@@ -124,6 +173,13 @@ export default function Sidebar({
           </span>
           <span>Trace 轨迹</span>
           <span className="mcp-count-badge trace-badge">复盘</span>
+        </button>
+        <button className="mcp-entry-btn" onClick={onOpenMcp}>
+          <span className="mcp-icon">⚙</span>
+          <span>MCP 扩展管理</span>
+          <span className="mcp-count-badge">
+            {mcpEnabledCount}/{mcpTotalCount}
+          </span>
         </button>
       </div>
     </aside>

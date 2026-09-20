@@ -10,31 +10,33 @@ import {
 import {
   deleteSessionRequest,
   fetchMcpServers,
+  fetchMemories,
   fetchModels,
   fetchModes,
   fetchSessions,
   fetchSettings,
-} from "./api/endpoints";
+  fetchUsage,
+} from "../api/endpoints";
 import {
   LS_MODEL,
   LS_MODE,
   LS_SESSION,
   newSessionId,
-} from "./lib/storage";
+} from "../lib/storage";
 import type {
   McpServer,
   ModelOption,
   ModeOption,
   Session,
   SettingsInfo,
-} from "./types";
-import { AuthProvider, useAuth } from "./context/AuthContext";
-import AuthOverlay from "./components/AuthOverlay";
-import Sidebar from "./components/Sidebar";
-import ChatView from "./components/ChatView";
-import TracesPanel from "./components/TracesPanel";
-import McpModal from "./components/McpModal";
-import SettingsModal from "./components/SettingsModal";
+} from "../types";
+import { AuthProvider, useAuth } from "../context/AuthContext";
+import AppHeader from "./AppHeader";
+import AuthOverlay from "../components/AuthOverlay";
+import Sidebar from "../components/Sidebar";
+import ChatView from "../components/ChatView";
+import TracesPanel from "../components/TracesPanel";
+import Modals from "./Modals";
 
 export default function App() {
   return (
@@ -70,6 +72,26 @@ function AppShell() {
 
   const [mcpOpen, setMcpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
+  const [memoryCount, setMemoryCount] = useState(0);
+  const [usageCount, setUsageCount] = useState(0);
+
+  // 记忆条数 / 用量总数：供左下角状态灯用，失败静默（不影响核心功能）。
+  const refreshCounts = useCallback(async () => {
+    try {
+      const mem = await fetchMemories();
+      setMemoryCount(mem.total);
+    } catch {
+      /* ignore */
+    }
+    try {
+      const u = await fetchUsage();
+      setUsageCount(u.totals.requests);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // 登录后一次性加载模型/模式/会话/MCP/设置。
   useEffect(() => {
@@ -92,6 +114,7 @@ function AppShell() {
         setSessions(sessionsRes.sessions);
         setMcpServers(mcpRes.servers);
         setSettings(settingsRes);
+        void refreshCounts();
 
         setCurrentModel((prev) => {
           const valid = modelsRes.models.some((m) => m.id === prev);
@@ -206,65 +229,29 @@ function AppShell() {
         onOpenMcp={() => setMcpOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenTraces={() => navigate("/traces")}
+        onOpenMemory={() => setMemoryOpen(true)}
+        onOpenUsage={() => setUsageOpen(true)}
+        memoryCount={memoryCount}
+        usageCount={usageCount}
       />
 
       <main>
-        <header>
-          <div>
-            <h1>{isTraces ? "Trace 轨迹" : "OpenUnknown"}</h1>
-            <div className="sub">
-              {isTraces
-                ? "每次对话的完整运行轨迹 · 原始报文 / 工具调用 / 检索"
-                : "基于 LangGraph · 支持 MCP 扩展"}
-            </div>
-          </div>
-          {!isTraces ? (
-            <>
-              <div className="mode-picker">
-                <label htmlFor="modeSelect">模式</label>
-                <select
-                  id="modeSelect"
-                  value={currentMode}
-                  onChange={(e) => {
-                    setCurrentMode(e.target.value);
-                    localStorage.setItem(LS_MODE, e.target.value);
-                  }}
-                >
-                  {modes.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="model-picker">
-                <label htmlFor="modelSelect">模型</label>
-                <select
-                  id="modelSelect"
-                  value={currentModel}
-                  onChange={(e) => {
-                    setCurrentModel(e.target.value);
-                    localStorage.setItem(LS_MODEL, e.target.value);
-                  }}
-                >
-                  {models.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
-          ) : null}
-          {isTraces ? (
-            <button
-              className="btn btn-secondary trace-toggle"
-              onClick={() => navigate("/")}
-            >
-              返回对话
-            </button>
-          ) : null}
-        </header>
+        <AppHeader
+          isTraces={isTraces}
+          modes={modes}
+          models={models}
+          currentMode={currentMode}
+          currentModel={currentModel}
+          onChangeMode={(id) => {
+            setCurrentMode(id);
+            localStorage.setItem(LS_MODE, id);
+          }}
+          onChangeModel={(id) => {
+            setCurrentModel(id);
+            localStorage.setItem(LS_MODEL, id);
+          }}
+          onBack={() => navigate("/")}
+        />
 
         <Routes>
           <Route
@@ -277,7 +264,10 @@ function AppShell() {
                 modes={modes}
                 hasApiKey={hasApiKey}
                 onOpenSettings={() => setSettingsOpen(true)}
-                onSettled={() => void refreshSessions()}
+                onSettled={() => {
+                  void refreshSessions();
+                  void refreshCounts();
+                }}
               />
             }
           />
@@ -286,17 +276,21 @@ function AppShell() {
         </Routes>
       </main>
 
-      <McpModal
-        open={mcpOpen}
-        onClose={() => setMcpOpen(false)}
-        servers={mcpServers}
-        onChanged={() => void refreshMcp()}
-      />
-      <SettingsModal
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+      <Modals
+        mcpOpen={mcpOpen}
+        settingsOpen={settingsOpen}
+        memoryOpen={memoryOpen}
+        usageOpen={usageOpen}
+        mcpServers={mcpServers}
         settings={settings}
-        onChanged={() => void refreshSettings()}
+        onCloseMcp={() => setMcpOpen(false)}
+        onCloseSettings={() => setSettingsOpen(false)}
+        onCloseMemory={() => setMemoryOpen(false)}
+        onCloseUsage={() => setUsageOpen(false)}
+        onMcpChanged={() => void refreshMcp()}
+        onSettingsChanged={() => void refreshSettings()}
+        onMemoryChanged={(n) => setMemoryCount(n)}
+        onUsageChanged={(n) => setUsageCount(n)}
       />
     </div>
   );
