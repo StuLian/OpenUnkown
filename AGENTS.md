@@ -77,7 +77,7 @@ Pillow>=10.0
 **顶层**
 - `deploy/` — 部署脚本 + nginx + systemd + 证书（详见 `DEPLOY_ALIYUN.md`）
 <!-- AUTO-GEN:LATEST -->
-- `docs/` — 架构图版本演进记录，**最新 = V1.7.0**（其余为历史版本）
+- `docs/` — 架构图版本演进记录，**最新 = V1.8.0**（其余为历史版本）
 <!-- /AUTO-GEN:LATEST -->
 - `data/` — `openunknown.db`（+ WAL/shm）、密钥文件、hotels 数据
 - `csv/` — `Seattle_Hotels.csv`（RAG 数据源）
@@ -171,6 +171,9 @@ EVAL_API_KEY=<key> .venv/bin/python -m backend.eval.rag_eval # RAG 检索评测�
     1. 非轻量变更先出 proposal 获人确认，未获批不写代码；
     2. 修 bug 必须先做历史回溯；
     3. 写完代码必须走收尾流程（`change_sop.md`）。
+    **豁免（2026-09-19 人工裁定）**：`docs/architecture_V*.html` 架构文档的生成 / 更新**不走
+    proposal / 验证 / 收尾流程**——纯文档产出，直接镜像上一版结构并更新架构内容即可；但「最新版本」
+    一行仍属自动生成区，需运行 `python scripts/gen_agents_doc.py` 刷新（或随 pre-commit 自动刷新）。
 11. **长期记忆（Phase 2）**：`agent/memory.py` 负责编排——超 `MAX_HISTORY_CHARS`(12000) 时滚动摘要、每轮异步抽取用户事实（`qwen-turbo`）、按 query 向量召回 top-k（numpy 余弦，不引向量库）；`agent/context.py` 的 `assemble_model_messages()` 负责组装（记忆是独立 `kind="memory"` 的 SystemMessage，trace 里以 `memory` tag 展示）。**阈值常量集中在 `agent/memory.py` 顶部**。记忆只进 LLM 输入、**不写 checkpoint**；任何一步失败都降级、不阻塞主流程。用户可在**左侧栏底部「我的记忆」独立入口**查看/删除（`api/routers/memory.py`，前端 `components/MemoryModal.tsx`）；「用量统计」同为左侧栏独立入口（`components/UsageModal.tsx`）。**实测 DashScope 支持多条/任意位置 system，故不做 system 合并**（trace 即真实报文）。
 
 ## 7. 维护说明

@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenUnknown 架构文档 V1.8.0</title>
+  <style>
+    :root {
+      --bg: #0f1117; --panel: #161922; --panel-2: #1d212c; --border: #2a2f3d;
+      --text: #e6e8ee; --muted: #9aa0ac; --accent: #6c8cff; --accent-2: #8a6cff;
+      --green: #5fcf80; --orange: #ffb86c; --pink: #ff8a9a; --red: #ff6c7a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1200px 600px at 80% -10%, #1a1d29 0%, var(--bg) 55%);
+      color: var(--text); line-height: 1.7; min-height: 100vh;
+    }
+    .wrap { max-width: 1000px; margin: 0 auto; padding: 48px 28px 80px; }
+    header.hero { border-bottom: 1px solid var(--border); padding-bottom: 28px; margin-bottom: 40px; }
+    .badge {
+      display: inline-block; font-size: 12px; font-weight: 600;
+      padding: 4px 12px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; letter-spacing: 0.5px;
+    }
+    h1 { font-size: 34px; margin: 16px 0 8px; font-weight: 700; letter-spacing: 0.5px; }
+    .subtitle { color: var(--muted); font-size: 15px; }
+    h2 {
+      font-size: 22px; margin: 48px 0 18px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border); font-weight: 600;
+      display: flex; align-items: center; gap: 10px;
+    }
+    h2 .num {
+      font-size: 13px; color: var(--accent); font-weight: 700;
+      width: 28px; height: 28px; border-radius: 8px;
+      background: rgba(108,140,255,0.12); border: 1px solid rgba(108,140,255,0.3);
+      display: inline-flex; align-items: center; justify-content: center; flex: none;
+    }
+    h3 { font-size: 16px; margin: 24px 0 10px; color: var(--text); font-weight: 600; }
+    p { margin: 10px 0; color: #d4d7de; }
+    code {
+      font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      background: var(--panel-2); padding: 2px 6px; border-radius: 5px;
+      font-size: 13px; color: var(--accent); border: 1px solid var(--border);
+    }
+    pre {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px 18px; overflow-x: auto;
+      font-size: 13px; line-height: 1.6;
+    }
+    pre code { background: none; border: none; padding: 0; color: #d4d7de; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 14px; }
+    th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    td code { font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+    .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+    .stat .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .stat .value { font-size: 18px; font-weight: 600; }
+    .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 5px; margin-right: 6px; font-weight: 600; }
+    .tag.blue { background: rgba(108,140,255,0.15); color: var(--accent); border: 1px solid rgba(108,140,255,0.3); }
+    .tag.green { background: rgba(95,207,128,0.15); color: var(--green); border: 1px solid rgba(95,207,128,0.3); }
+    .tag.orange { background: rgba(255,184,108,0.15); color: var(--orange); border: 1px solid rgba(255,184,108,0.3); }
+    .tag.pink { background: rgba(255,138,154,0.15); color: var(--pink); border: 1px solid rgba(255,138,154,0.3); }
+    .tag.purple { background: rgba(138,108,255,0.15); color: var(--accent-2); border: 1px solid rgba(138,108,255,0.3); }
+    .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 16px 0; font-size: 13px; }
+    .flow .step { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-weight: 500; }
+    .flow .arrow { color: var(--accent); font-weight: 700; }
+    ul { padding-left: 22px; } ul li { margin: 6px 0; color: #d4d7de; }
+    .meta-row { color: var(--muted); font-size: 13px; margin-top: 6px; }
+    .note { border-left: 3px solid var(--orange); background: rgba(255,184,108,0.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .success { border-left: 3px solid var(--green); background: rgba(95,207,128,0.06); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .todo { border-left: 3px solid var(--orange); background: rgba(255,184,108,0.08); padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 14px; }
+    .todo strong { color: var(--orange); }
+    footer { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
+    .version-tag {
+      position: fixed; top: 16px; right: 20px; z-index: 50;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+      padding: 6px 14px; border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: white; box-shadow: 0 4px 16px rgba(108,140,255,0.35);
+    }
+    .changelog { font-size: 14px; }
+    .changelog li { margin: 8px 0; }
+    .changelog .new { color: var(--green); font-weight: 600; }
+    .changelog .refactor { color: var(--accent-2); font-weight: 600; }
+
+    /* ---------- Archify 架构图（内联 SVG） ---------- */
+    .diagram-figure { margin: 20px 0 28px; }
+    .archify-diagram {
+      background: #16181f;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px;
+      overflow: hidden;
+      /* 主题变量（沿用 Archify dark 主题，mask 与容器背景一致以正确遮挡连线） */
+      --grid: #1e293b;
+      --text: #ffffff;
+      --text-muted: #94a3b8;
+      --arrow: #64748b;
+      --arrow-emphasis: #34d399;
+      --mask: #16181f;
+      --frontend-fill: rgba(8, 51, 68, 0.4);
+      --frontend-stroke: #22d3ee;
+      --backend-fill: rgba(6, 78, 59, 0.4);
+      --backend-stroke: #34d399;
+      --database-fill: rgba(76, 29, 149, 0.4);
+      --database-stroke: #a78bfa;
+      --cloud-fill: rgba(120, 53, 15, 0.3);
+      --cloud-stroke: #fbbf24;
+      --security-fill: rgba(136, 19, 55, 0.4);
+      --security-stroke: #fb7185;
+      --messagebus-fill: rgba(251, 146, 60, 0.3);
+      --messagebus-stroke: #fb923c;
+      --external-fill: rgba(30, 41, 59, 0.5);
+      --external-stroke: #94a3b8;
+    }
+    .archify-diagram svg { width: 100%; height: auto; display: block; }
+    .archify-diagram .c-grid { stroke: var(--grid); fill: none; }
+    .archify-diagram .c-mask { fill: var(--mask); stroke: none; }
+    .archify-diagram .c-frontend { fill: var(--frontend-fill); stroke: var(--frontend-stroke); }
+    .archify-diagram .c-backend { fill: var(--backend-fill); stroke: var(--backend-stroke); }
+    .archify-diagram .c-database { fill: var(--database-fill); stroke: var(--database-stroke); }
+    .archify-diagram .c-external { fill: var(--external-fill); stroke: var(--external-stroke); }
+    .archify-diagram .t-primary { fill: var(--text); }
+    .archify-diagram .t-muted { fill: var(--text-muted); }
+    .archify-diagram .t-frontend { fill: var(--frontend-stroke); }
+    .archify-diagram .t-backend { fill: var(--backend-stroke); }
+    .archify-diagram .t-cloud { fill: var(--cloud-stroke); }
+    .archify-diagram .t-messagebus { fill: var(--messagebus-stroke); }
+    .archify-diagram .t-external { fill: var(--external-stroke); }
+    .archify-diagram .t-database { fill: var(--database-stroke); }
+    .archify-diagram .semantic-sigil { fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; opacity: 0.76; pointer-events: none; }
+    .archify-diagram .semantic-sigil > * { vector-effect: non-scaling-stroke; }
+    .archify-diagram .semantic-sigil .sigil-fill { fill: currentColor; stroke: none; }
+    .archify-diagram .s-frontend { color: var(--frontend-stroke); }
+    .archify-diagram .s-backend { color: var(--backend-stroke); }
+    .archify-diagram .s-database { color: var(--database-stroke); }
+    .archify-diagram .s-external { color: var(--external-stroke); }
+    .archify-diagram .a-default { stroke: var(--arrow); fill: none; }
+    .archify-diagram .a-emphasis { stroke: var(--arrow-emphasis); fill: none; }
+    .archify-diagram .a-dashed { stroke: var(--database-stroke); fill: none; stroke-dasharray: 4,4; }
+    .archify-diagram .m-default { fill: var(--arrow); }
+    .archify-diagram .m-emphasis { fill: var(--arrow-emphasis); }
+    .archify-diagram .m-security { fill: var(--security-stroke); }
+    .archify-diagram .m-dashed { fill: var(--database-stroke); }
+    .archify-diagram .c-region { fill: rgba(251, 191, 36, 0.05); stroke: var(--cloud-stroke); stroke-dasharray: 8,4; }
+    .diagram-caption { color: var(--muted); font-size: 13px; text-align: center; margin-top: 12px; }
+    .legend-row { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 12px 0 4px; font-size: 12px; color: var(--muted); }
+    .legend-row .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  </style>
+</head>
+<body>
+  <div class="version-tag">V1.8.0</div>
+  <div class="wrap">
+    <header class="hero">
+      <span class="badge">V1.8.0</span>
+      <h1>OpenUnknown 架构文档</h1>
+      <div class="subtitle">Trace 可观测 · 长期记忆 · Token 预算</div>
+      <div class="meta-row">文档版本 1.8.0 &nbsp;|&nbsp; 生成日期 2026-09-19</div>
+    </header>
+
+    <section>
+      <h2><span class="num">0</span>V1.8.0 变更摘要</h2>
+      <p>V1.7.0 补齐了<strong>语意路由</strong>与<strong>飞书写操作人工确认</strong>，但三个「看不见、记不住、留不下」的问题还在：<strong>每轮对话没有可回放的 trace</strong>（出了错只能靠人肉复述）、<strong>RAG/prompt 质量没有量化手段</strong>（改完不知道变好还是变坏）、<strong>长会话 token 越滚越大、跨会话毫无记忆</strong>。V1.8.0 做三件事：用<strong>Trace 轨迹 + 离线评测</strong>建立可观测与测量底座，用<strong>长期记忆 + Token 预算</strong>让对话「记得住又花得起」。</p>
+      <ul class="changelog">
+        <li><span class="new">[新增]</span> <strong>Trace 轨迹可观测</strong>：新增 <code>backend/tracing/collector.py</code>（<code>TraceCollector</code> 采集原始报文/工具调用/召回），每轮落 <code>runs</code> 表并自动打 flag（<code>tool_error</code>/<code>no_answer</code>/<code>error</code>/<code>pending_confirm</code>），用户反馈落 <code>feedback</code> 表；前端新增 <code>/traces</code> 轨迹面板 + 单轮详情（<code>TracesPanel.tsx</code>/<code>RunDetail.tsx</code>）。</li>
+        <li><span class="new">[新增]</span> <strong>离线评测</strong>：新增 <code>backend/eval/</code>（<code>metrics.py</code> recall@k/MRR/nDCG + <code>rag_eval.py</code> + <code>prompt_eval.py</code> + HTML 报告 + 评测集），RAG 检索与 prompt 结构从此可量化回归。</li>
+        <li><span class="new">[新增]</span> <strong>长期记忆</strong>：新增 <code>backend/agent/memory.py</code>（滚动摘要 + 事实抽取/召回）与 <code>memories</code> 表（<code>kind='summary'|'fact'</code>），前端左侧栏底部「我的记忆」入口（<code>MemoryModal.tsx</code>）。</li>
+        <li><span class="new">[新增]</span> <strong>Token 预算 + 上下文裁剪</strong>：新增 <code>backend/agent/context.py</code>，超 <code>MAX_HISTORY_CHARS</code> 触发滚动摘要、旧工具报文截断；prompt 分层 + 版本化（<code>PROMPT_VERSION</code>）。</li>
+        <li><span class="new">[新增]</span> <strong>用量统计入口</strong>：左侧栏底部「用量统计」独立入口（<code>UsageModal.tsx</code>），与「我的记忆」并列、带状态点。</li>
+        <li><span class="refactor">[调整]</span> <strong>前端结构</strong>：<code>App.tsx</code> 拆分为 <code>src/App/</code> 包（<code>index.tsx</code> + <code>AppHeader.tsx</code> + <code>Modals.tsx</code>）。</li>
+      </ul>
+
+      <h3>量化效果</h3>
+      <div class="grid">
+        <div class="stat"><div class="label">Trace 新表</div><div class="value" style="color:var(--accent)">2<span style="font-size:12px;color:var(--muted);margin-left:6px">runs 每轮 trace · feedback 用户反馈</span></div></div>
+        <div class="stat"><div class="label">记忆召回 top-k</div><div class="value" style="color:var(--green)">3<span style="font-size:12px;color:var(--muted);margin-left:6px">query 向量召回</span></div></div>
+        <div class="stat"><div class="label">滚动摘要阈值</div><div class="value" style="color:var(--green)">12000<span style="font-size:12px;color:var(--muted);margin-left:6px">字符 MAX_HISTORY_CHARS</span></div></div>
+        <div class="stat"><div class="label">RAG recall@5</div><div class="value" style="color:var(--orange)">0.311<span style="font-size:12px;color:var(--muted);margin-left:6px">16 问基线 · MRR 0.620</span></div></div>
+        <div class="stat"><div class="label">新增 API 路由</div><div class="value" style="color:var(--green)">2<span style="font-size:12px;color:var(--muted);margin-left:6px">/api/memory · /api/runs</span></div></div>
+        <div class="stat"><div class="label">新增模块</div><div class="value" style="color:var(--green)">2<span style="font-size:12px;color:var(--muted);margin-left:6px">agent/memory.py · agent/context.py</span></div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="num">1</span>系统架构总览</h2>
+      <p>下图由 <strong>Archify</strong> 绘制（架构图类型，inline SVG）。主对话链路自左向右：<strong>React SPA → FastAPI → LangGraph Agent → 百炼模型</strong>；V1.7.0 的<strong>语意路由</strong>与<strong>飞书安全闸门</strong>保留，V1.8.0 新增两条纵向链路——<strong>记忆链路</strong>（<code>agent → 记忆编排 → 上下文组装</code>，事实/摘要落 <code>memories</code> 表、经 <code>token 预算</code> 组装进模型报文）与<strong>可观测链路</strong>（每轮 trace 落 <code>runs</code> 表，前端 <code>/traces</code> 面板复盘）。</p>
+      <div class="legend-row">
+        <span><span class="dot" style="background:#22d3ee"></span>前端（React）</span>
+        <span><span class="dot" style="background:#34d399"></span>后端（FastAPI/LangGraph）</span>
+        <span><span class="dot" style="background:#a78bfa"></span>数据库（SQLite）</span>
+        <span><span class="dot" style="background:#94a3b8"></span>外部服务（模型/飞书）</span>
+        <span><span class="dot" style="background:#fbbf24"></span>区域边界</span>
+        <span style="color:var(--muted)">虚线 = 语义兜底 / interrupt / trace 复盘</span>
+      </div>
+      <div class="diagram-figure">
+        <div class="archify-diagram">
+<svg viewBox="0 0 1120 560" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+        <title id="archify-diagram-title">OpenUnknown 架构 · V1.8.0</title>
+        <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- Boundaries (behind everything) -->
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="前端 · React + Vite" x="10" y="30" width="250" height="520" rx="12" class="c-region" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" data-composition-frame-label="后端 · FastAPI + LangGraph" x="290" y="30" width="540" height="520" rx="12" class="c-region" stroke-width="1"/>
+
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="2" data-composition-frame-label="外部服务 · 百炼 + 飞书" x="860" y="30" width="250" height="520" rx="12" class="c-region" stroke-width="1"/>
+
+        <!-- Connection paths (before components for correct z-order) -->
+        <path data-edge-from="browser" data-edge-to="fastapi" data-edge-label="HTTPS /api/*" data-edge-key="0" data-edge-id="browser-fastapi" data-composition-points="225,102;315,102" d="M 225 102 L 315 102" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="fastapi" data-edge-to="agent" data-edge-label="astream" data-edge-key="1" data-edge-id="fastapi-agent" data-composition-points="475,102;505,102" d="M 475 102 L 505 102" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="agent" data-edge-to="llm" data-edge-label="LLM 调用" data-edge-key="2" data-edge-id="agent-llm" data-composition-points="685,102;885,102" d="M 685 102 L 885 102" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="agent" data-edge-to="router" data-edge-label="route_intents 意图预筛" data-edge-key="3" data-edge-id="agent-router" data-composition-points="595,134;595,175" d="M 595 134 L 595 175" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="router" data-edge-to="llm" data-edge-label="text-embedding-v3 语义召回" data-edge-key="4" data-edge-id="router-llm" data-composition-points="685,207;885,122" d="M 685 207 L 885 122" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="router" data-edge-to="gate" data-edge-label="写操作 tool_calls" data-edge-key="5" data-edge-id="router-gate" data-composition-points="595,247;595,300" d="M 595 247 L 595 300" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="gate" data-edge-to="lark" data-edge-label="lark-cli 执行" data-edge-key="6" data-edge-id="gate-lark" data-composition-points="685,336;885,220" d="M 685 336 L 885 220" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="gate" data-edge-to="confirm" data-edge-label="interrupt 待确认" data-edge-key="7" data-edge-id="gate-confirm" data-composition-points="505,336;225,336" d="M 505 336 L 225 336" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="confirm" data-edge-to="fastapi" data-edge-label="resume 确认" data-edge-key="8" data-edge-id="confirm-fastapi" data-composition-points="135,300;135,150;395,150;395,134" d="M 135 300 L 135 150 L 395 150 L 395 134" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="agent" data-edge-to="sqlite" data-edge-label="checkpoint" data-edge-key="9" data-edge-id="agent-sqlite" data-composition-points="505,134;395,175" d="M 505 134 L 395 175" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="agent" data-edge-to="memory" data-edge-label="记忆编排" data-edge-key="10" data-edge-id="agent-memory" data-composition-points="505,120;490,120;490,316;475,316" d="M 505 120 L 490 120 L 490 316 L 475 316" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="memory" data-edge-to="sqlite" data-edge-label="记忆落库" data-edge-key="11" data-edge-id="memory-sqlite" data-composition-points="395,280;395,247" d="M 395 280 L 395 247" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="memory" data-edge-to="context" data-edge-label="注入事实" data-edge-key="12" data-edge-id="memory-context" data-composition-points="395,352;395,370" d="M 395 352 L 395 370" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="trace-panel" data-edge-to="fastapi" data-edge-label="GET /api/runs 复盘" data-edge-key="13" data-edge-id="trace-panel-fastapi" data-composition-points="225,456;305,456;305,134;315,134" d="M 225 456 L 305 456 L 305 134 L 315 134" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+
+        <!-- Components -->
+        <g id="node-browser" data-node-id="browser" data-node-label="React SPA" tabindex="0" role="button" aria-label="聚焦React SPA，React 18 · Vite, 前端 · React + Vite" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="React 18 · Vite" data-node-context="前端 · React + Vite">
+          <title>React SPA · React 18 · Vite · 前端 · React + Vite</title>
+          <rect x="45" y="70" width="180" height="64" rx="6" class="c-mask"/>
+          <rect x="45" y="70" width="180" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(51 76) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="135" y="104" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">React SPA</text>
+        <text data-detail="context" x="135" y="120" class="t-muted" font-size="9" text-anchor="middle">React 18 · Vite</text>
+        </g>
+
+        <g id="node-confirm" data-node-id="confirm" data-node-label="确认卡片" tabindex="0" role="button" aria-label="聚焦确认卡片，interrupt 人工确认, 前端 · React + Vite" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="interrupt 人工确认" data-node-tag="V1.7.0" data-node-context="前端 · React + Vite">
+          <title>确认卡片 · interrupt 人工确认 · 前端 · React + Vite · V1.7.0</title>
+          <rect x="45" y="300" width="180" height="72" rx="6" class="c-mask"/>
+          <rect x="45" y="300" width="180" height="72" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(51 306) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="135" y="334" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">确认卡片</text>
+        <text data-detail="context" x="135" y="350" class="t-muted" font-size="9" text-anchor="middle">interrupt 人工确认</text>
+        <text data-detail="fine" x="135" y="364" class="t-frontend" font-size="7" text-anchor="middle">V1.7.0</text>
+        </g>
+
+        <g id="node-trace-panel" data-node-id="trace-panel" data-node-label="Trace 轨迹面板" tabindex="0" role="button" aria-label="聚焦Trace 轨迹面板，/traces 复盘, 前端 · React + Vite" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="/traces 复盘" data-node-tag="V1.8.0 新增" data-node-context="前端 · React + Vite">
+          <title>Trace 轨迹面板 · /traces 复盘 · 前端 · React + Vite · V1.8.0 新增</title>
+          <rect x="45" y="420" width="180" height="72" rx="6" class="c-mask"/>
+          <rect x="45" y="420" width="180" height="72" rx="6" class="c-frontend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(51 426) scale(0.6875)">
+            <rect x="2" y="3" width="12" height="10" rx="2"/>
+            <path d="M2 6.5h12"/>
+            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
+            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="135" y="454" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Trace 轨迹面板</text>
+        <text data-detail="context" x="135" y="470" class="t-muted" font-size="9" text-anchor="middle">/traces 复盘</text>
+        <text data-detail="fine" x="135" y="484" class="t-frontend" font-size="7" text-anchor="middle">V1.8.0 新增</text>
+        </g>
+
+        <g id="node-fastapi" data-node-id="fastapi" data-node-label="FastAPI" tabindex="0" role="button" aria-label="聚焦FastAPI，uvicorn :8000, 后端 · FastAPI + LangGraph" aria-pressed="false" data-node-kind="backend" data-node-sublabel="uvicorn :8000" data-node-context="后端 · FastAPI + LangGraph">
+          <title>FastAPI · uvicorn :8000 · 后端 · FastAPI + LangGraph</title>
+          <rect x="315" y="70" width="160" height="64" rx="6" class="c-mask"/>
+          <rect x="315" y="70" width="160" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(321 76) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="395" y="104" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">FastAPI</text>
+        <text data-detail="context" x="395" y="120" class="t-muted" font-size="9" text-anchor="middle">uvicorn :8000</text>
+        </g>
+
+        <g id="node-sqlite" data-node-id="sqlite" data-node-label="SQLite" tabindex="0" role="button" aria-label="聚焦SQLite，openunknown.db (WAL), 后端 · FastAPI + LangGraph" aria-pressed="false" data-node-kind="database" data-node-sublabel="openunknown.db (WAL)" data-node-tag="runs·feedback·memories" data-node-context="后端 · FastAPI + LangGraph">
+          <title>SQLite · openunknown.db (WAL) · runs·feedback·memories · 后端 · FastAPI + LangGraph</title>
+          <rect x="315" y="175" width="160" height="72" rx="6" class="c-mask"/>
+          <rect x="315" y="175" width="160" height="72" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(321 181) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="395" y="209" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">SQLite</text>
+        <text data-detail="context" x="395" y="225" class="t-muted" font-size="9" text-anchor="middle">openunknown.db (WAL)</text>
+        <text data-detail="fine" x="395" y="239" class="t-database" font-size="7" text-anchor="middle">runs · feedback · memories</text>
+        </g>
+
+        <g id="node-memory" data-node-id="memory" data-node-label="记忆编排" tabindex="0" role="button" aria-label="聚焦记忆编排，滚动摘要 + 事实召回, 后端 · FastAPI + LangGraph" aria-pressed="false" data-node-kind="backend" data-node-sublabel="滚动摘要 + 事实召回" data-node-tag="V1.8.0 新增" data-node-context="后端 · FastAPI + LangGraph">
+          <title>记忆编排 · 滚动摘要 + 事实召回 · 后端 · FastAPI + LangGraph · V1.8.0 新增</title>
+          <rect x="315" y="280" width="160" height="72" rx="6" class="c-mask"/>
+          <rect x="315" y="280" width="160" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(321 286) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="395" y="314" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">记忆编排</text>
+        <text data-detail="context" x="395" y="330" class="t-muted" font-size="9" text-anchor="middle">滚动摘要 + 事实召回</text>
+        <text data-detail="fine" x="395" y="344" class="t-backend" font-size="7" text-anchor="middle">V1.8.0 新增</text>
+        </g>
+
+        <g id="node-context" data-node-id="context" data-node-label="上下文组装" tabindex="0" role="button" aria-label="聚焦上下文组装，token 预算 · 裁剪, 后端 · FastAPI + LangGraph" aria-pressed="false" data-node-kind="backend" data-node-sublabel="token 预算 · 裁剪" data-node-tag="V1.8.0 新增" data-node-context="后端 · FastAPI + LangGraph">
+          <title>上下文组装 · token 预算 · 裁剪 · 后端 · FastAPI + LangGraph · V1.8.0 新增</title>
+          <rect x="315" y="370" width="160" height="72" rx="6" class="c-mask"/>
+          <rect x="315" y="370" width="160" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(321 376) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="395" y="404" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">上下文组装</text>
+        <text data-detail="context" x="395" y="420" class="t-muted" font-size="9" text-anchor="middle">token 预算 · 裁剪</text>
+        <text data-detail="fine" x="395" y="434" class="t-backend" font-size="7" text-anchor="middle">V1.8.0 新增</text>
+        </g>
+
+        <g id="node-agent" data-node-id="agent" data-node-label="LangGraph Agent" tabindex="0" role="button" aria-label="聚焦LangGraph Agent，chat ⇄ tools, 后端 · FastAPI + LangGraph" aria-pressed="false" data-node-kind="backend" data-node-sublabel="chat ⇄ tools" data-node-context="后端 · FastAPI + LangGraph">
+          <title>LangGraph Agent · chat ⇄ tools · 后端 · FastAPI + LangGraph</title>
+          <rect x="505" y="70" width="180" height="64" rx="6" class="c-mask"/>
+          <rect x="505" y="70" width="180" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(511 76) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="595" y="104" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LangGraph Agent</text>
+        <text data-detail="context" x="595" y="120" class="t-muted" font-size="9" text-anchor="middle">chat ⇄ tools</text>
+        </g>
+
+        <g id="node-router" data-node-id="router" data-node-label="意图路由" tabindex="0" role="button" aria-label="聚焦意图路由，关键词 + embedding, 后端 · FastAPI + LangGraph" aria-pressed="false" data-node-kind="backend" data-node-sublabel="关键词 + embedding" data-node-tag="V1.7.0" data-node-context="后端 · FastAPI + LangGraph">
+          <title>意图路由 · 关键词 + embedding · 后端 · FastAPI + LangGraph · V1.7.0</title>
+          <rect x="505" y="175" width="180" height="72" rx="6" class="c-mask"/>
+          <rect x="505" y="175" width="180" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(511 181) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="595" y="209" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">意图路由</text>
+        <text data-detail="context" x="595" y="225" class="t-muted" font-size="9" text-anchor="middle">关键词 + embedding</text>
+        <text data-detail="fine" x="595" y="239" class="t-backend" font-size="7" text-anchor="middle">V1.7.0</text>
+        </g>
+
+        <g id="node-gate" data-node-id="gate" data-node-label="飞书安全闸门" tabindex="0" role="button" aria-label="聚焦飞书安全闸门，classify_risk · interrupt, 后端 · FastAPI + LangGraph" aria-pressed="false" data-node-kind="backend" data-node-sublabel="classify_risk · interrupt" data-node-tag="V1.7.0" data-node-context="后端 · FastAPI + LangGraph">
+          <title>飞书安全闸门 · classify_risk · interrupt · 后端 · FastAPI + LangGraph · V1.7.0</title>
+          <rect x="505" y="300" width="180" height="72" rx="6" class="c-mask"/>
+          <rect x="505" y="300" width="180" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(511 306) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="595" y="334" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">飞书安全闸门</text>
+        <text data-detail="context" x="595" y="350" class="t-muted" font-size="9" text-anchor="middle">classify_risk · interrupt</text>
+        <text data-detail="fine" x="595" y="364" class="t-backend" font-size="7" text-anchor="middle">V1.7.0</text>
+        </g>
+
+        <g id="node-llm" data-node-id="llm" data-node-label="DashScope 百炼" tabindex="0" role="button" aria-label="聚焦DashScope 百炼，LLM · qwen-turbo · embedding, 外部服务 · 百炼 + 飞书" aria-pressed="false" data-node-kind="external" data-node-sublabel="LLM · qwen-turbo · embedding" data-node-context="外部服务 · 百炼 + 飞书">
+          <title>DashScope 百炼 · LLM · qwen-turbo · embedding · 外部服务 · 百炼 + 飞书</title>
+          <rect x="885" y="70" width="190" height="64" rx="6" class="c-mask"/>
+          <rect x="885" y="70" width="190" height="64" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(891 76) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="980" y="104" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">DashScope 百炼</text>
+        <text data-detail="context" x="980" y="120" class="t-muted" font-size="9" text-anchor="middle">LLM · qwen-turbo · embedding</text>
+        </g>
+
+        <g id="node-lark" data-node-id="lark" data-node-label="飞书 Lark" tabindex="0" role="button" aria-label="聚焦飞书 Lark，lark-cli 写操作, 外部服务 · 百炼 + 飞书" aria-pressed="false" data-node-kind="external" data-node-sublabel="lark-cli 写操作" data-node-tag="V1.7.0 写闸门" data-node-context="外部服务 · 百炼 + 飞书">
+          <title>飞书 Lark · lark-cli 写操作 · 外部服务 · 百炼 + 飞书 · V1.7.0 写闸门</title>
+          <rect x="885" y="175" width="190" height="72" rx="6" class="c-mask"/>
+          <rect x="885" y="175" width="190" height="72" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(891 181) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="980" y="209" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">飞书 Lark</text>
+        <text data-detail="context" x="980" y="225" class="t-muted" font-size="9" text-anchor="middle">lark-cli 写操作</text>
+        <text data-detail="fine" x="980" y="239" class="t-external" font-size="7" text-anchor="middle">V1.7.0 写闸门</text>
+        </g>
+
+        <!-- Connection labels -->
+        <g data-detail="context" data-edge-from="browser" data-edge-to="fastapi" data-edge-label="HTTPS /api/*" data-edge-key="0" data-edge-id="browser-fastapi">
+          <rect x="236" y="82" width="68" height="14" rx="3" class="c-mask"/>
+          <text x="270" y="92" class="t-backend" font-size="8" text-anchor="middle">HTTPS /api/*</text>
+        </g>
+        <g data-detail="context" data-edge-from="fastapi" data-edge-to="agent" data-edge-label="astream" data-edge-key="1" data-edge-id="fastapi-agent">
+          <rect x="474" y="82" width="32" height="14" rx="3" class="c-mask"/>
+          <text x="490" y="92" class="t-muted" font-size="8" text-anchor="middle">astream</text>
+        </g>
+        <g data-detail="context" data-edge-from="agent" data-edge-to="llm" data-edge-label="LLM 调用" data-edge-key="2" data-edge-id="agent-llm">
+          <rect x="765" y="82" width="40" height="14" rx="3" class="c-mask"/>
+          <text x="785" y="92" class="t-backend" font-size="8" text-anchor="middle">LLM 调用</text>
+        </g>
+        <g data-detail="context" data-edge-from="agent" data-edge-to="router" data-edge-label="route_intents 意图预筛" data-edge-key="3" data-edge-id="agent-router">
+          <rect x="567" y="148" width="100" height="14" rx="3" class="c-mask"/>
+          <text x="617" y="158" class="t-muted" font-size="8" text-anchor="middle">route_intents 意图预筛</text>
+        </g>
+        <g data-detail="context" data-edge-from="router" data-edge-to="llm" data-edge-label="语义召回" data-edge-key="4" data-edge-id="router-llm">
+          <rect x="769" y="161" width="32" height="14" rx="3" class="c-mask"/>
+          <text x="785" y="171" class="t-messagebus" font-size="8" text-anchor="middle">语义召回</text>
+        </g>
+        <g data-detail="context" data-edge-from="router" data-edge-to="gate" data-edge-label="写操作 tool_calls" data-edge-key="5" data-edge-id="router-gate">
+          <rect x="575" y="268" width="74" height="14" rx="3" class="c-mask"/>
+          <text x="612" y="278" class="t-muted" font-size="8" text-anchor="middle">写操作 tool_calls</text>
+        </g>
+        <g data-detail="context" data-edge-from="gate" data-edge-to="lark" data-edge-label="lark-cli 执行" data-edge-key="6" data-edge-id="gate-lark">
+          <rect x="755" y="268" width="60" height="14" rx="3" class="c-mask"/>
+          <text x="785" y="278" class="t-backend" font-size="8" text-anchor="middle">lark-cli 执行</text>
+        </g>
+        <g data-detail="context" data-edge-from="gate" data-edge-to="confirm" data-edge-label="interrupt 待确认" data-edge-key="7" data-edge-id="gate-confirm">
+          <rect x="331" y="326" width="68" height="14" rx="3" class="c-mask"/>
+          <text x="365" y="336" class="t-messagebus" font-size="8" text-anchor="middle">interrupt 待确认</text>
+        </g>
+        <g data-detail="context" data-edge-from="confirm" data-edge-to="fastapi" data-edge-label="resume 确认" data-edge-key="8" data-edge-id="confirm-fastapi">
+          <rect x="241" y="140" width="48" height="14" rx="3" class="c-mask"/>
+          <text x="265" y="150" class="t-messagebus" font-size="8" text-anchor="middle">resume 确认</text>
+        </g>
+        <g data-detail="context" data-edge-from="agent" data-edge-to="sqlite" data-edge-label="checkpoint" data-edge-key="9" data-edge-id="agent-sqlite">
+          <rect x="428" y="145" width="45" height="14" rx="3" class="c-mask"/>
+          <text x="450" y="155" class="t-muted" font-size="8" text-anchor="middle">checkpoint</text>
+        </g>
+        <g data-detail="context" data-edge-from="agent" data-edge-to="memory" data-edge-label="记忆编排" data-edge-key="10" data-edge-id="agent-memory">
+          <rect x="456" y="143" width="64" height="14" rx="3" class="c-mask"/>
+          <text x="488" y="153" class="t-muted" font-size="8" text-anchor="middle">记忆编排</text>
+        </g>
+        <g data-detail="context" data-edge-from="memory" data-edge-to="sqlite" data-edge-label="记忆落库" data-edge-key="11" data-edge-id="memory-sqlite">
+          <rect x="410" y="255" width="56" height="14" rx="3" class="c-mask"/>
+          <text x="438" y="265" class="t-muted" font-size="8" text-anchor="middle">记忆落库</text>
+        </g>
+        <g data-detail="context" data-edge-from="memory" data-edge-to="context" data-edge-label="注入事实" data-edge-key="12" data-edge-id="memory-context">
+          <rect x="330" y="353" width="56" height="14" rx="3" class="c-mask"/>
+          <text x="358" y="363" class="t-muted" font-size="8" text-anchor="middle">注入事实</text>
+        </g>
+        <g data-detail="context" data-edge-from="trace-panel" data-edge-to="fastapi" data-edge-label="GET /api/runs 复盘" data-edge-key="13" data-edge-id="trace-panel-fastapi">
+          <rect x="232" y="438" width="66" height="14" rx="3" class="c-mask"/>
+          <text x="265" y="448" class="t-messagebus" font-size="8" text-anchor="middle">GET /api/runs</text>
+        </g>
+
+        <!-- Boundary labels (foreground masks keep routes out of titles) -->
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="前端 · React + Vite">
+          <rect data-graph-role="structural-frame-label-mask" x="14" y="40" width="112.6" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="18" y="53" class="t-cloud" font-size="9" font-weight="600">前端 · React + Vite</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="region" data-composition-frame-label="后端 · FastAPI + LangGraph">
+          <rect data-graph-role="structural-frame-label-mask" x="294" y="40" width="150.4" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="298" y="53" class="t-cloud" font-size="9" font-weight="600">后端 · FastAPI + LangGraph</text>
+        </g>
+
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="2" data-composition-frame-kind="region" data-composition-frame-label="外部服务 · 百炼 + 飞书">
+          <rect data-graph-role="structural-frame-label-mask" x="864" y="40" width="100" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="868" y="53" class="t-cloud" font-size="9" font-weight="600">外部服务 · 百炼 + 飞书</text>
+        </g>
+
+        <!-- Legend -->
+
+      </svg>
+        </div>
+        <div class="diagram-caption">图 1 · OpenUnknown V1.8.0 系统架构（Archify 绘制；浅色节点标注「V1.8.0 新增」）</div>
+      </div>
+      <div class="note"><strong>说明</strong>：离线评测（<code>backend/eval/</code>）不在运行时链路中，未入图；酒店 RAG（FAISS + BM25 + rerank）、认证/加密（JWT + Fernet）、LangSmith 追踪为既有能力，未展开。记忆编排的 <code>qwen-turbo</code> 摘要/抽取与 <code>text-embedding-v3</code> 事实召回、上下文组装的 token 预算/裁剪，均发生在 <code>chat</code> 节点组装消息时（图中以「记忆编排 → 上下文组装 → 注入事实」示意）；记忆只进 LLM 输入、<strong>不写 checkpoint</strong>。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">2</span>可观测性：Trace 轨迹 + 离线评测</h2>
+      <p>V1.7.0 及以前，一轮对话结束后没有留下任何可回放的记录——模型「为什么这么答」、工具「到底调了什么」、RAG「召回了哪几条」全靠人肉复述。V1.8.0 用两条链路补上测量底座：<strong>运行时 Trace</strong>（每轮落库 + 自动打标 + 前端复盘）与<strong>离线评测</strong>（RAG 检索指标 + prompt 结构回归）。</p>
+
+      <h3>2.1 TraceCollector 采集与落库</h3>
+      <p><code>TraceCollector</code> 挂在 <code>config.configurable["trace_collector"]</code>，随图流转采集原始报文（含 <code>kind</code> 标记）、工具调用与召回结果，<code>streaming.py</code> 在轮次结束时落 <code>runs</code> 表并按 flag 自动打标。</p>
+      <pre><code># backend/tracing/collector.py —— 一轮对话的采集器
+class TraceCollector:
+    def __init__(self, ...):
+        self.messages = []      # 原始报文（message_to_serializable 带 kind 标记）
+        self.tool_calls = []    # 工具调用
+        self.recalls = []       # RAG 召回
+        self.flags = set()      # tool_error / no_answer / error / pending_confirm / memory_injected
+
+    def add_flag(self, flag: str):   # graph.py 在关键节点打标，如 memory_injected
+        self.flags.add(flag)</code></pre>
+      <div class="success"><strong>降级原则</strong>：trace 落库失败只告警、<strong>不影响主对话流程</strong>——可观测性不能反过来拖累可用性。</div>
+
+      <h3>2.2 Trace 轨迹面板与用户反馈</h3>
+      <p>前端新增 <code>/traces</code> 路由（<code>TracesPanel.tsx</code> 列表 + <code>RunDetail.tsx</code> 单轮详情），后端 <code>api/routers/runs.py</code> 提供 <code>GET /api/runs</code> / <code>GET /api/runs/{run_id}</code> / <code>POST /api/runs/{run_id}/feedback</code>。用户反馈落 <code>feedback</code> 表，与 trace 一一对应，构成后续「坏案例 → 修 prompt/阈值」的闭环。</p>
+      <pre><code># backend/api/streaming.py —— 落库 + 自动打标（节选）
+collector = config["configurable"].get("trace_collector")
+save_run(run_id, session_id, user_id, messages=collector.messages,
+         tool_calls=collector.tool_calls, flags=collector.flags,
+         prompt_version=collector.prompt_version)   # 失败只告警，不 raise</code></pre>
+
+      <h3>2.3 离线评测：RAG 指标 + prompt 结构回归</h3>
+      <p><code>backend/eval/</code> 提供两类离线评测：<code>metrics.py</code> 实现 <code>recall@k / MRR / nDCG@k</code>，<code>rag_eval.py</code> 跑酒店检索评测（<code>datasets/rag_hotels.json</code> 16 问）；<code>prompt_eval.py</code> 对分层 prompt 做<strong>结构回归</strong>（各层是否齐全、版本号是否一致），免费可跑。</p>
+      <pre><code># backend/eval/metrics.py —— 检索评测指标
+def recall_at_k(hits, k): ...      # 命中率：golden 是否进 top-k
+def mrr(hits): ...                 # 倒数排名均值：golden 首次出现位置
+def ndcg_at_k(hits, k): ...        # 排序质量：靠前命中权重更高
+
+# 基线（rag_hotels.json 16 问，gt-rerank-v2 后）：
+#   recall@5 = 0.311 / MRR = 0.620 / nDCG@5 = 0.377
+#   其中 4/16 零命中，根因：宽属性问法（"性价比高的酒店"）的 golden 标注过严</code></pre>
+      <div class="note"><strong>先量化检索、再谈生成</strong>：RAG 评测只度量「检索环节是否把对的文档捞进 top-k」，不度量生成答案好坏——把生成层噪声与检索层问题分开，改索引/阈值/rerank 才能有对照。</div>
+    </section>
+
+    <section>
+      <h2><span class="num">3</span>长期记忆与 Token 预算</h2>
+      <p>长会话有两个老问题：<strong>token 越滚越大</strong>（历史全量塞给模型，又贵又超限）与<strong>跨会话零记忆</strong>（换会话/隔天就忘了用户是谁、偏好是什么）。V1.8.0 用「<strong>滚动摘要 + 最近原文</strong>」压 token，用「<strong>可检索事实</strong>」补跨会话记忆。</p>
+
+      <h3>3.1 Token 预算与滚动摘要</h3>
+      <p>历史超过 <code>MAX_HISTORY_CHARS</code> 时触发滚动摘要：把较早历史压成一段摘要（<code>qwen-turbo</code>），只保留<strong>摘要 + 最近 N 条原文</strong>，既省 token 又保住近期上下文细节。旧工具报文再单独截断到 <code>OLD_TOOL_CHARS</code>，把高开销的工具输出压扁。</p>
+      <pre><code># backend/agent/memory.py —— 阈值常量集中于此（一处可调、评测可对照）
+MAX_HISTORY_CHARS = 12000   # 超限触发滚动摘要
+SUMMARY_KEEP_TAIL = 16      # 摘要 + 最近 16 条原文
+# backend/agent/context.py —— 消息裁剪
+KEEP_TAIL = 16
+OLD_TOOL_CHARS = 240        # 旧工具报文截断，压 token</code></pre>
+
+      <h3>3.2 可检索长期记忆（facts）</h3>
+      <p>每轮异步从对话里抽取用户事实（<code>qwen-turbo</code>，fire-and-forget、失败静默降级），<code>text-embedding-v3</code> 向量化后存 <code>memories</code> 表；回答前按当前 query 向量召回 top-k（<strong>numpy 余弦，不引向量库</strong>），相似度低于 <code>MEMORY_MIN_SIM</code> 的丢弃。</p>
+      <pre><code># backend/agent/memory.py —— 事实抽取 + 召回
+MEMORY_TOP_K = 3
+MEMORY_MIN_SIM = 0.35
+MEMORY_MAX_FACTS = 50      # 每人事实上限
+FACT_DEDUP_SIM = 0.92      # 高度重复事实去重
+MEMORY_MODEL = "qwen-turbo"
+
+async def extract_facts(...): ...          # qwen-turbo 抽取，schedule_extraction 异步调度
+def recall_facts(query, facts): ...        # text-embedding-v3 → numpy cosine → top-k</code></pre>
+
+      <h3>3.3 上下文组装与注入</h3>
+      <p><code>assemble_model_messages()</code> 把「system + 记忆 + 裁剪后的历史」拼成最终报文；记忆是<strong>独立的 <code>kind="memory"</code> SystemMessage</strong>，trace 里以 <code>memory</code> tag 展示，并打 <code>memory_injected</code> flag。实测 DashScope 支持多条/任意位置 system，<strong>不做 system 合并</strong>——trace 即真实报文，避免「你以为合并了、实际没合并」的偏差。</p>
+      <pre><code># backend/agent/context.py —— 组装最终模型报文
+def assemble_model_messages(messages, ...):
+    history = compact_history(messages)      # token 预算 + 裁剪
+    facts = recall_facts(...)                # 记忆召回（失败降级为空）
+    # 记忆 = 独立 SystemMessage(additional_kwargs={"kind": "memory"})
+    return all_messages, {"memory_injected": bool(facts), "summarized": ...}
+
+# backend/agent/graph.py —— _chat_node
+messages, info = assemble_model_messages(...)
+collector.add_flag("memory_injected")        # trace 打标
+resp = await llm.ainvoke(messages)           # 无 system 合并，直接发</code></pre>
+
+      <h3>3.4 前端入口</h3>
+      <p>左侧栏底部新增<strong>「我的记忆」</strong>与<strong>「用量统计」</strong>两个独立入口（带状态点），分别由 <code>MemoryModal.tsx</code> / <code>UsageModal.tsx</code> 渲染；记忆查看/删除走后端 <code>api/routers/memory.py</code>。</p>
+      <pre><code>GET    /api/memory           # 列出摘要 + 事实
+DELETE /api/memory/{fact_id} # 删除单条事实（非本人 404）
+DELETE /api/memory           # 清空自己的记忆</code></pre>
+    </section>
+
+    <section>
+      <h2><span class="num">4</span>目录结构变更</h2>
+      <pre><code>backend/tracing/collector.py              # 【新增】TraceCollector：原始报文/工具调用/召回/flag
+backend/eval/metrics.py                   # 【新增】recall@k / MRR / nDCG@k
+backend/eval/rag_eval.py                  # 【新增】RAG 检索评测（需 ApiKey）
+backend/eval/prompt_eval.py               # 【新增】prompt 结构回归（免费）
+backend/eval/report.py                    # 【新增】HTML 评测报告
+backend/eval/datasets/rag_hotels.json     # 【新增】RAG 评测集（16 问）
+backend/eval/datasets/prompt_cases.json   # 【新增】prompt 结构用例
+backend/agent/memory.py                   # 【新增】滚动摘要 + 事实抽取/召回 + 阈值常量
+backend/agent/context.py                  # 【新增】token 预算 + 消息裁剪 + 记忆注入
+backend/store/runs.py                     # 【新增】runs 表存取
+backend/store/feedback.py                 # 【新增】feedback 表存取
+backend/store/memory.py                   # 【新增】memories 表存取（summary/fact）
+backend/api/routers/runs.py               # 【新增】GET /api/runs + 反馈接口
+backend/api/routers/memory.py             # 【新增】GET/DELETE /api/memory
+backend/agent/graph.py                    # 【改】_chat_node 用 assemble_model_messages + memory_injected flag
+backend/agent/prompts.py                  # 【改】分层 + PROMPT_VERSION 版本化
+backend/api/streaming.py                  # 【改】trace 落库 + 自动打 flag
+backend/api/messages.py                   # 【改】抽 build_attachment_messages / message_to_dict
+backend/store/db.py                       # 【改】runs/feedback/memories 表（幂等迁移）
+backend/store/sessions.py                 # 【改】delete_session 级联删 summary 记忆
+
+frontend/src/App/index.tsx                # 【调整】App.tsx 拆分为 App/ 包入口
+frontend/src/App/AppHeader.tsx            # 【调整】顶部栏拆出
+frontend/src/App/Modals.tsx               # 【调整】模态框编排拆出
+frontend/src/components/TracesPanel.tsx   # 【新增】Trace 轨迹面板（/traces）
+frontend/src/components/RunDetail.tsx     # 【新增】单轮 trace 详情
+frontend/src/components/MemoryModal.tsx   # 【新增】我的记忆（侧栏底部）
+frontend/src/components/UsageModal.tsx    # 【新增】用量统计（侧栏底部）
+frontend/src/components/Sidebar.tsx       # 【改】侧栏底部新增记忆/用量入口 + 状态点
+frontend/src/styles.css                   # 【改】.status-dot + 记忆/用量样式</code></pre>
+    </section>
+
+    <section>
+      <h2><span class="num">5</span>关键设计决策</h2>
+      <ul>
+        <li><strong>trace 落库失败只告警、不阻塞主流程</strong>：可观测性是「旁路」，不能反过来影响对话可用性；宁可少一条 trace，也不让一轮回答失败。</li>
+        <li><strong>记忆只进 LLM 输入、不写 checkpoint</strong>：LangGraph checkpoint 保持轻量（只存对话状态），跨会话记忆独立存 <code>memories</code> 表，删除会话时级联清理 summary、保留 fact。</li>
+        <li><strong>阈值常量集中在 <code>memory.py</code> 顶部</strong>：<code>MAX_HISTORY_CHARS</code>/<code>MEMORY_MIN_SIM</code> 等一处可调，评测可对照，避免散落各处拍脑袋。</li>
+        <li><strong>事实召回用 numpy 余弦、不引向量库</strong>：单用户事实 ≤50 条，O(n) 遍历足够，避免为「几个人几条事实」引入重依赖。</li>
+        <li><strong>滚动摘要 + 最近 N 条原文</strong>：摘要省 token、原文保近期上下文细节，两者互补；旧工具报文再单独截断。</li>
+        <li><strong>实测 DashScope 支持多条/任意位置 system，不做 system 合并</strong>：trace 即真实报文，杜绝「合并了但实际没合并」的隐性偏差。</li>
+        <li><strong>记忆抽取 fire-and-forget</strong>：<code>schedule_extraction</code> 异步跑、不阻塞本轮回答，失败静默降级。</li>
+        <li><strong>RAG 评测用召回指标而非「答对了没」</strong>：先量化检索环节（recall@k/MRR/nDCG），把生成层噪声隔离出去，改索引/阈值/rerank 才有对照。</li>
+        <li><strong>prompt 分层 + 版本号</strong>：<code>PERSONA/BEHAVIOR/OUTPUT_FORMAT/CONTEXT_SECTION_TEMPLATE</code> 分层 + <code>PROMPT_VERSION</code>，结构回归检查防「改了 prompt 忘了记」。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">6</span>待优化清单</h2>
+      <div class="todo">
+        <strong>问题 1：RAG 评测集过窄、golden 过严</strong><br/>
+        16 问里 4 问零命中（recall@5=0.311），根因是宽属性问法（「性价比高的酒店」）的 golden 只标了少数目标。<br/>
+        优化方向：扩评测集 + 放宽宽属性问法的 golden，或按「属性覆盖」而非「单条命中」判定召回。
+      </div>
+      <div class="todo">
+        <strong>问题 2：记忆阈值缺真实查询校准</strong><br/>
+        <code>MEMORY_MIN_SIM=0.35</code> 等为经验值，尚未用真实查询量化校准。<br/>
+        优化方向：用与 <code>rag_eval</code> 相同的方式，造一批「应召回/不应召回」的事实查询对，跑出阈值曲线再定。
+      </div>
+      <div class="todo">
+        <strong>问题 3：pytest 未进依赖清单</strong><br/>
+        测试用例靠 <code>.venv/bin/pip install pytest</code> 手工装，新环境复现易漏。<br/>
+        优化方向：把 pytest 纳入 dev 依赖（或 <code>requirements-dev.txt</code>），并在 README 写明。
+      </div>
+      <div class="todo">
+        <strong>问题 4：SSE 断连尾部丢失</strong><br/>
+        流式输出中断连时，最后一段可能丢失，trace 与前端展示不一致。<br/>
+        优化方向：查 <code>streaming.py</code> 缓冲与 <code>sse.ts</code> 的收尾处理，补断连补发/落库兜底。
+      </div>
+      <div class="todo">
+        <strong>问题 5：6 个超 300 行文件待拆分</strong><br/>
+        <code>ChatView.tsx</code>(939)、<code>McpModal.tsx</code>(513)、<code>Markdown.tsx</code>(445)、<code>streaming.py</code>(356)、<code>graph.py</code>(343)、<code>browser_use.py</code>(334) 均超限（CSS 豁免）。<br/>
+        优化方向：按「拆分必须成包」约定逐一套目录拆分，且本次改动不再增加行数。
+      </div>
+      <div class="todo">
+        <strong>问题 6：事实抽取每轮都跑 qwen-turbo，开销累积</strong><br/>
+        长会话每轮都异步抽一次事实，embedding + LLM 调用随轮次线性累积。<br/>
+        优化方向：加节流/缓存，或改为「会话结束时批量抽取一次」。
+      </div>
+    </section>
+
+    <footer>
+      OpenUnknown 架构文档 · V1.8.0 · 2026-09-19 · Trace 可观测 · 长期记忆 · Token 预算
+    </footer>
+  </div>
+</body>
+</html>
