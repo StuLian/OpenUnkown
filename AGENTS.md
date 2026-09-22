@@ -60,7 +60,7 @@ Pillow>=10.0
 - `main.py` — FastAPI 入口：组装应用、挂载静态资源、注册路由
 - `config.py` — 全局配置：`PLATFORMS`、`AVAILABLE_MODELS`、`MODES`、`.env` 加载（须最先 import）
 - `api/` — HTTP 层：路由（`routers/`）、请求体模型（`schemas.py`）、流式逻辑（`streaming.py`）
-- `agent/` — LangGraph 智能体：状态图（`graph.py`）、LLM 封装（`llm.py`）、prompt（`prompts.py`）、**记忆编排（`memory.py`）与上下文组装（`context.py`）**、意图路由（`router.py`：关键词快速通道 + embedding 语义召回兜底）、MCP（`mcp/`）、工具（`tools/`：weather / hotels / browser_use / lark_cli）
+- `agent/` — LangGraph 智能体：状态图（`graph.py`）、LLM 封装（`llm.py`）、prompt（`prompts.py`）、**记忆编排（`memory.py`）与上下文组装（`context.py`）**、意图路由（`router.py`：关键词快速通道 + embedding 语义召回兜底）、MCP（`mcp/`）、工具（`tools/`：weather / hotels / browser_use / **run_command 通用命令执行**）、**本地 skill 加载（`skills/`：扫描 `~/.agents/skills/` 生成目录注入 prompt，`read_skill` 工具按需读说明书）**
 - `auth/` — 登录 / JWT / 依赖注入（`deps.py`）
 - `security/` — 加密：Fernet（`crypto.py`）、主密钥（`master_key.py`）、challenge
 - `store/` — SQLite 存取：`db.py`（连接与建表）+ 各领域 store（sessions / mcp / users / usage / runs / feedback / memory）
@@ -155,8 +155,8 @@ EVAL_API_KEY=<key> .venv/bin/python -m backend.eval.rag_eval # RAG 检索评测�
 3. **`.env` 加载点在 `backend/config.py`**：`load_dotenv` 必须位于任何第三方库 import 之前（尤其 dashscope 在 import 时会固化 api_key）。新增环境变量走 `.env`（`cp .env.example .env`，`.env` 已 gitignore）。
 4. **数据库**：SQLite 单例连接 + `threading.Lock` 串行访问，WAL 模式。表：`sessions`、`mcp_servers`、`users`、`user_api_keys`、`usage_log`、`runs`（每轮 trace）、`feedback`（用户反馈）、`memories`（长期记忆：`kind='summary'` 会话摘要 / `kind='fact'` 用户事实）；checkpoint 表（`checkpoints`/`writes`）由 `SqliteSaver` 自管。建表逻辑集中在 `store/db.py` 的 `get_conn()`，含幂等迁移。**注意**：`_lock` 不可重入，已持锁的函数内不要再调同样加锁的 store 函数（如 `delete_session` 内直接执行 SQL）。
 5. **扩展模型平台**：在 `config.py` 的 `PLATFORMS` 加条目即可；模型/模式白名单也在 `config.py`（`AVAILABLE_MODELS`/`MODES`），前后端共用。
-6. **LangGraph 结构**：`get_graph()` 构建 `StateGraph(MessagesState)`，节点 `chat` ⇄ `tools`，`START→chat`，工具调用后回到 chat。工具按需注入（weather/hotels/browser_use/lark_cli/MCP）。
-7. **飞书集成**：`agent/tools/lark_cli.py` 调用 `lark-cli`，system prompt 只注入短 domain 路由表，子命令由模型 `--help` 按需拉取。**写操作安全闸门**：tools 节点用 `interrupt()` 对 `write`/`high-risk-write` 命令先暂停，前端弹确认卡片，用户点「确认执行」后经 `POST /api/chat/confirm` 恢复执行（`high-risk-write` 确认后由 `ensure_yes()` 自动补 `--yes`）；`read` 直接放行。读写判定在 `classify_risk()`，以 `lark-cli <cmd> --help` 的 `Risk:` 行为权威信号并缓存，未知兜底为写。
+6. **LangGraph 结构**：`get_graph()` 构建 `StateGraph(MessagesState)`，节点 `chat` ⇄ `tools`，`START→chat`，工具调用后回到 chat。工具按需注入（weather/hotels/browser_use/MCP）；`run_command` 与 `read_skill` 常驻（schema 极小，靠风险确认闸门兜底）。
+7. **通用命令执行（run_command）**：`agent/tools/shell.py` 提供唯一通用 shell 工具 `run_command`，本地 skill 说明书里要求的命令（`lark-cli` / `npx` 等）都由它执行，不再为每类命令注册专用工具（原 `lark_cli` 独立工具已退役，`lark_cli.py` 仅保留 `classify_risk`/`ensure_yes` 供复用）。**写操作安全闸门**：tools 节点用 `interrupt()` 对 `write`/`high-risk-write` 命令先暂停，前端弹确认卡片，用户点「确认执行」后经 `POST /api/chat/confirm` 恢复执行（`high-risk-write` 确认后由 `ensure_yes()` 自动补 `--yes`）；`read` 直接放行。风险分级在 `shell.classify_command_risk()`：`lark-cli` 前缀走 `lark_cli.classify_risk()`（以 `lark-cli <cmd> --help` 的 `Risk:` 行为权威信号并缓存），其余走只读命令白名单，未知兜底为写（默认拒绝）。**lark 不再注入任何提示词**，飞书操作由 lark-* skill 说明书 + `run_command` 承接。
 8. **LangSmith**：纯环境变量自动追踪，无埋点代码；tags=`openunknown`/`model:*`/`mode:*`。
 9. **Trace 轨迹**：每轮对话经 `tracing/collector.py` 的 `TraceCollector`（挂在 `config.configurable["trace_collector"]`）收集原始报文/工具调用/召回，由 `streaming.py` 落 `runs` 表并自动打 flag（`tool_error`/`no_answer`/`error`/`pending_confirm`）；用户反馈落 `feedback` 表。Trace 轨迹面板后端 `api/routers/runs.py`，前端 `TracesPanel.tsx`。trace 落库失败只告警、不影响主流程。
 10. **AI 开发纪律（规则路由表）**：AI 协作规则分「常驻」与「按需」两类，按动作触发读取：
@@ -197,11 +197,17 @@ backend/
   │   │   ├── client.py
   │   │   ├── converter.py
   │   │   └── manager.py
+  │   ├── skills/
+  │   │   ├── __init__.py
+  │   │   ├── loader.py
+  │   │   ├── reader.py
+  │   │   └── registry.py
   │   ├── tools/
   │   │   ├── __init__.py
   │   │   ├── browser_use.py
   │   │   ├── hotels.py
   │   │   ├── lark_cli.py
+  │   │   ├── shell.py
   │   │   └── weather.py
   │   ├── __init__.py
   │   ├── context.py

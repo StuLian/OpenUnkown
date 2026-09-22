@@ -1,52 +1,31 @@
-"""飞书 CLI 工具：让 Agent 通过 lark-cli 操作飞书全业务域。
+"""lark-cli 命令风险分级工具函数（供 shell.run_command 复用）。
 
-system prompt 只注入短目录（domain 路由表）；具体子命令由模型按需调用
-lark_cli("<domain> --help") 获取，避免每轮携带完整 skill 说明书。
+原 `lark_cli` 独立工具已退役：飞书操作改由通用 `run_command("lark-cli ...")` 承接，
+本模块只保留「判定一条 lark-cli 命令是读还是写」的分级逻辑。
+
+风险分级权威信号：lark-cli 每条命令的 `--help` 都带一行 `Risk: read | write | high-risk-write`，
+以它为准并缓存；判定不了时兜底为 write（宁可多确认一次，也不静默写入）。
 """
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
 import shlex
 import shutil
 
-from langchain_core.tools import tool
-
 logger = logging.getLogger(__name__)
 
 _LARK_CLI = shutil.which("lark-cli")
 
-# skill 名 → lark-cli domain；不在表内的 skill 不进短目录（认证/工作流等）
-_DOMAIN_MAP = {
-    "lark-im": "im",
-    "lark-calendar": "calendar",
-    "lark-doc": "docs",
-    "lark-drive": "drive",
-    "lark-sheets": "sheets",
-    "lark-base": "base",
-    "lark-task": "task",
-    "lark-mail": "mail",
-    "lark-approval": "approval",
-    "lark-okr": "okr",
-    "lark-wiki": "wiki",
-    "lark-contact": "contact",
-    "lark-slides": "slides",
-    "lark-whiteboard": "whiteboard",
-    "lark-minutes": "minutes",
-    "lark-note": "note",
-    "lark-vc": "vc",
-    "lark-attendance": "attendance",
-    "lark-markdown": "markdown",
-    "lark-apps": "apps",
-    "lark-event": "event",
-}
-
-
-def is_available() -> bool:
-    """检查 lark-cli 是否已安装。"""
-    return _LARK_CLI is not None
+# 只读 domain：CLI 管理类域名不改飞书业务数据。
+_READ_ONLY_DOMAINS = frozenset({
+    "skills", "schema", "help", "doctor", "config", "profile", "auth", "update",
+})
+_RISK_CACHE: dict[str, str] = {}
+_RISK_RE = re.compile(
+    r"^\s*Risk:\s*(read|write|high-risk-write)\b", re.IGNORECASE | re.MULTILINE
+)
 
 
 async def _run(args: list[str], timeout: float = 60) -> str:
@@ -68,86 +47,6 @@ async def _run(args: list[str], timeout: float = 60) -> str:
     if proc.returncode != 0:
         return f"Error (exit {proc.returncode}): {err or out}"
     return out if out else err
-
-
-def _brief_purpose(desc: str, limit: int = 18) -> str:
-    """把 skill 描述压成一行用途：优先取标题（冒号前），否则截断。"""
-    text = desc.strip().splitlines()[0]
-    for sep in ("。", "；", ";", "：", ":"):
-        idx = text.find(sep)
-        if 0 < idx <= limit:
-            return text[:idx]
-    return text[:limit]
-
-
-async def load_skill_descriptions() -> str:
-    """加载飞书 domain 列表（纯数据行），头部模板在 prompts.py 中定义。
-
-    返回形如 '- approval: 飞书审批\\n- apps: 妙搭...' 的多行字符串，
-    由 graph.py 使用 LARK_SECTION.format(domain_list=...) 组装完整段落。
-    """
-    if not is_available():
-        return ""
-    try:
-        raw = await _run(["skills", "list"])
-        data = json.loads(raw)
-        skills = data.get("skills", [])
-        if not skills:
-            return ""
-
-        lines = []
-        for s in skills:
-            name = s.get("name", "")
-            domain = _DOMAIN_MAP.get(name)
-            if not domain:
-                continue
-            desc = s.get("description", "") or domain
-            lines.append(f"- {domain}: {_brief_purpose(desc)}")
-
-        return "\n".join(lines)
-    except Exception as e:
-        logger.warning("加载 lark-cli skill 描述失败: %s", e)
-        return ""
-
-
-@tool
-async def lark_cli(command: str) -> str:
-    """执行飞书 CLI 命令。不确定子命令名时，必须先把 command 设为 "<domain> --help"。
-
-    Args:
-        command: 不含 'lark-cli' 前缀。例如:
-                 'docs --help' 查看文档域子命令,
-                 'docs +fetch --doc "<URL或token>" --doc-format markdown' 读取文档,
-                 'calendar +agenda' 查看今日日程,
-                 'task +get-my-tasks' 查看待办。
-    """
-    if not is_available():
-        return "Error: lark-cli 未安装，请先运行 npm install -g @larksuite/cli"
-
-    logger.info("[LarkCLI] 执行命令: lark-cli %s", command)
-
-    try:
-        args = shlex.split(command)
-    except ValueError:
-        args = command.split()
-
-    result = await _run(args)
-    logger.info("[LarkCLI] 返回(前500字): %s", result[:500])
-    return result
-
-
-# ---------------------------------------------------------------------------
-# 风险分级：判定一条 lark-cli 命令是读还是写。写操作需经用户确认后才执行（见 graph.py）。
-# lark-cli 每条命令的 --help 都带一行 "Risk: read | write | high-risk-write"，
-# 这里以它为权威信号，并缓存结果；判定不了时按 write 处理（宁可多确认一次，也不静默写入）。
-# ---------------------------------------------------------------------------
-_READ_ONLY_DOMAINS = frozenset({
-    "skills", "schema", "help", "doctor", "config", "profile", "auth", "update",
-})
-_RISK_CACHE: dict[str, str] = {}
-_RISK_RE = re.compile(
-    r"^\s*Risk:\s*(read|write|high-risk-write)\b", re.IGNORECASE | re.MULTILINE
-)
 
 
 def _command_key(args: list[str]) -> tuple[str, list[str]]:
@@ -186,6 +85,7 @@ async def _risk_from_help(key_tokens: list[str]) -> str:
 async def classify_risk(command: str) -> str:
     """判定 lark-cli 命令风险级别：read / write / high-risk-write。
 
+    command 不含 'lark-cli' 前缀（如 'docs +fetch --doc ...'）。
     - read：只读，直接放行；
     - write / high-risk-write：会改动飞书数据，执行前需用户确认；
     - 判定失败兜底为 write（需要确认）。

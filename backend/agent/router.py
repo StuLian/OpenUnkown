@@ -37,12 +37,6 @@ _MAP_KWS = (
     "位置", "坐标", "经纬", "距离", "多远", "骑行", "步行", "驾车", "开车",
     "公交", "地铁", "打车", "高德", "地址", "在哪", "poi",
 )
-_FEISHU_KWS = (
-    "飞书", "lark", "文档", "docx", "wiki", "多维表格", "电子表格", "表格",
-    "sheet", "日历", "日程", "会议", "待办", "任务", "邮件", "邮箱",
-    "云盘", "云空间", "知识库", "妙记", "审批", "通讯录", "考勤",
-    "幻灯片", "画板", "okr", "feishu.cn", "larksuite",
-)
 _BROWSE_KWS = (
     "网页", "网站", "网址", "链接", "打开网页", "浏览", "抓取", "爬取", "访问网页",
     "上网", "在线", "互联网", "搜索", "检索", "搜一下", "搜索引擎", "热搜",
@@ -60,7 +54,6 @@ _HOTEL_KWS = (
 _KEYWORD_MAP = {
     "weather": _WEATHER_KWS,
     "map": _MAP_KWS,
-    "feishu": _FEISHU_KWS,
     "browse": _BROWSE_KWS,
     "hotel": _HOTEL_KWS,
 }
@@ -90,16 +83,6 @@ _ANCHORS: dict[str, tuple[str, ...]] = {
         "坐地铁怎么走",
         "步行过去多远",
         "周边有哪些景点",
-    ),
-    "feishu": (
-        "帮我查飞书文档",
-        "今天有什么会议",
-        "我的待办任务有哪些",
-        "这条审批到哪一步了",
-        "帮我发一封邮件",
-        "查一下我的考勤",
-        "云盘里找一下文件",
-        "知识库里搜一下",
     ),
     "browse": (
         "上网搜一下最新消息",
@@ -226,7 +209,7 @@ _FOLLOWUP_MAX_CHARS = 5
 
 
 async def route_intents(text: str, api_key: str, prev_user_text: str = "") -> dict[str, bool]:
-    """返回各意图是否命中：weather/map/feishu/browse/hotel。
+    """返回各意图是否命中：weather/map/browse/hotel。
 
     关键词命中走快速通道（同步、零网络）；全部未命中且文本非空时，
     才向量化查询做语义召回兜底。embedding 失败不回退到全绑定，

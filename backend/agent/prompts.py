@@ -60,20 +60,17 @@ IDENTITY_PROMPT = (
     "回答身份或模型问题时只说 {model_name}，不要沿用历史对话中出现的其他模型名。"
 )
 
-# 飞书 CLI 能力引导：仅在命中飞书意图时追加到 system prompt。
-# {domain_list} 由 lark_cli.load_skill_descriptions() 动态填充。
-LARK_SECTION = (
-    "## 飞书 CLI 能力\n"
-    "所有飞书操作只通过工具 lark_cli，不存在 lark_doc / lark_calendar 等独立工具。\n"
-    "调用：lark_cli(command=\"<domain> <subcommand> [flags]\")。\n"
-    "不确定子命令时必须先 lark_cli(command=\"<domain> --help\")，不要臆造命令名。\n"
-    "写操作（发消息、建文档、写表格、发邮件、删除/撤回等）会先弹出确认，"
-    "由用户批准后才真正执行；你无需也不应在命令里自行添加 --yes，系统会在用户确认后处理。\n"
-    "domain 目录：\n{domain_list}\n"
-    "示例：不确定读文档命令时先 lark_cli(command=\"docs --help\")，"
-    "确认后再 lark_cli(command='docs +fetch --doc \"<URL或token>\" --doc-format markdown')。"
+# 本地 skill 目录：常驻注入，让模型知道当前有哪些本地 skill 可用；
+# 命中某 skill 时先用 read_skill 拉取正文，再按需 read_skill(ref_path=...) 读参考文件。
+# {directory} 由 skills.registry.get_skill_directory() 动态填充。
+SKILLS_DIRECTORY_SECTION = (
+    "## 本地 Skill 目录\n"
+    "以下是当前可用的本地技能（skill）。当用户任务匹配某个 skill 时，"
+    "先调用 read_skill(skill_name=\"<名>\") 读取该 skill 的说明书正文，再严格按其工作流执行；"
+    "正文里引用到参考文件时，用 read_skill(skill_name=\"<名>\", ref_path=\"references/<文件>\") 按需读取，"
+    "不要臆造说明书中没有的命令或步骤。\n"
+    "{directory}"
 )
-
 
 def build_system_prompt(app_name: str, context: str | None = None) -> str:
     """组装基础 system prompt：人设 + 行为 + 格式，可选 RAG 上下文。"""

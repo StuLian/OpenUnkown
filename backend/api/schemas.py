@@ -34,7 +34,7 @@ class ChatRequest(BaseModel):
 
 
 class ChatConfirmRequest(BaseModel):
-    """飞书写操作人工确认的恢复请求体（/api/chat/confirm）。"""
+    """命令执行人工确认的恢复请求体（/api/chat/confirm）。"""
 
     session_id: str
     approved: bool

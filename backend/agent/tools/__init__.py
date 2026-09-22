@@ -6,16 +6,12 @@ graph.py 只从这里 import TOOLS，不直接依赖具体工具文件。
 from backend.agent.tools.weather import get_weather
 from backend.agent.tools.browser_use import browser_fetch, browser_search
 from backend.agent.tools.hotels import search_hotels
-from backend.agent.tools.lark_cli import lark_cli, is_available as lark_cli_available
+from backend.agent.tools.shell import run_command
 
 TOOLS = [
     get_weather,
     browser_fetch,
     browser_search,
     search_hotels,
+    run_command,
 ]
-
-# lark-cli 已安装时自动注册
-if lark_cli_available():
-    TOOLS.append(lark_cli)
-

@@ -74,7 +74,7 @@ def _build_config(
 
 
 async def _pending_confirm(graph, config: dict) -> dict | None:
-    """若图停在飞书写操作待确认的 interrupt 上，返回其负载；否则返回 None。"""
+    """若图停在命令执行待确认的 interrupt 上，返回其负载；否则返回 None。"""
     try:
         state = await graph.aget_state(config)
     except Exception as e:  # noqa: BLE001
@@ -85,7 +85,7 @@ async def _pending_confirm(graph, config: dict) -> dict | None:
     for task in (state.tasks or []):
         for iv in (task.interrupts or []):
             val = getattr(iv, "value", None)
-            if isinstance(val, dict) and val.get("type") == "lark_write_confirmation":
+            if isinstance(val, dict) and val.get("type") == "command_write_confirmation":
                 return {
                     "command": val.get("command", ""),
                     "risk": val.get("risk", ""),
@@ -95,7 +95,7 @@ async def _pending_confirm(graph, config: dict) -> dict | None:
 
 
 async def _drain_pending_confirm(graph, config: dict, request: Request) -> bool:
-    """若该会话残留未确认的飞书写操作（用户刷新/切换会话后重发），先自动取消并跑完。
+    """若该会话残留未确认的命令执行（用户刷新/切换会话后重发），先自动取消并跑完。
 
     不把取消结果推给前端，只保证 checkpoint 干净，避免阻塞后续新消息。返回是否发生过取消。
     """
@@ -108,7 +108,7 @@ async def _drain_pending_confirm(graph, config: dict, request: Request) -> bool:
             if await request.is_disconnected():
                 break
     except Exception as e:  # noqa: BLE001
-        logger.warning("清理残留飞书确认失败: %s", e)
+        logger.warning("清理残留命令确认失败: %s", e)
     return True
 
 
@@ -124,7 +124,7 @@ async def _stream_turn(
 ):
     """跑完一轮图并产出 SSE 事件 dict（不含 model/mode/notice 头与 [DONE]）。
 
-    飞书写操作在 tools 节点被 interrupt 停住时，产出 confirm 事件且不产 usage；
+    命令执行在 tools 节点被 interrupt 停住时，产出 confirm 事件且不产 usage；
     整轮正常结束时产出 usage（并落 usage_log）；无论何种结束都落一条 run trace。
     """
     collector = (config.get("configurable") or {}).get("trace_collector")
@@ -195,7 +195,7 @@ async def _stream_turn(
         if collector is not None:
             collector.set_error(str(exc))
 
-    # 图若停在飞书写操作待确认处，产出 confirm 事件；此时轮次未完成，不产 usage。
+    # 图若停在命令执行待确认处，产出 confirm 事件；此时轮次未完成，不产 usage。
     confirm = await _pending_confirm(graph, config)
     if confirm is not None:
         if collector is not None:
@@ -274,7 +274,7 @@ async def stream_answer(message: str, session_id: str, model: str, mode: str, us
         user_id, session_id, effective_model, effective_mode, api_key, username, collector
     )
 
-    # 上一轮若残留未确认的飞书写操作（用户中途刷新/切换会话），先自动取消，避免阻塞本轮
+    # 上一轮若残留未确认的命令执行（用户中途刷新/切换会话），先自动取消，避免阻塞本轮
     await _drain_pending_confirm(graph, config, request)
 
     # 附件名不再拼进正文，而是放到 additional_kwargs，供历史回显单独渲染成 caption
@@ -310,7 +310,7 @@ async def resume_answer(
     user_id: str,
     request: Request,
 ):
-    """飞书写操作人工确认后，从 checkpoint 恢复图并继续流式输出剩余回答。
+    """命令执行人工确认后，从 checkpoint 恢复图并继续流式输出剩余回答。
 
     approved=True 表示用户确认执行写操作，False 表示取消。
     """
@@ -335,7 +335,7 @@ async def resume_answer(
         model=model,
         mode=mode,
         platform=DEFAULT_PLATFORM,
-        input_text="[飞书写操作确认恢复]",
+        input_text="[命令执行确认恢复]",
         prompt_version=PROMPT_VERSION,
     )
     config = _build_config(user_id, session_id, model, mode, api_key, username, collector)

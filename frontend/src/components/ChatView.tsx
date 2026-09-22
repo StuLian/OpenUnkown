@@ -255,7 +255,7 @@ function useChat({
         prev.map((m) => (m.id === botId ? { ...m, ...p } : m))
       );
 
-    // 流式跑一轮；遇到飞书写操作确认时递归调用 /api/chat/confirm 恢复后续流。
+    // 流式跑一轮；遇到命令执行确认时递归调用 /api/chat/confirm 恢复后续流。
     const streamTurn = async (
       url: string,
       body: Record<string, unknown>
@@ -402,7 +402,7 @@ function useChat({
   }, []);
 
   const stop = useCallback(() => {
-    // 正在等待飞书确认：点击停止视为取消该写操作，走 /chat/confirm 干净收尾
+    // 正在等待命令确认：点击停止视为取消该写操作，走 /chat/confirm 干净收尾
     if (decideRef.current) {
       decideRef.current(false);
       decideRef.current = null;
@@ -794,27 +794,26 @@ function MessageRow({
         <div className="msg-body">
           {message.pendingConfirm ? (
             <div className={"confirm-card" + (message.pendingConfirm.risk === "high-risk-write" ? " danger" : "")}>
-              <div className="confirm-title">
-                ⚠ 飞书写操作需要你的确认
+              <div className="confirm-strip">
+                <span className="confirm-dot" />
+                {message.pendingConfirm.risk === "high-risk-write" ? "高危操作，等待确认" : "等待确认"}
               </div>
-              <div className="confirm-risk">
-                风险级别：{message.pendingConfirm.risk}
-              </div>
-              <div className="confirm-cmd">
-                <code>{message.pendingConfirm.command}</code>
+              <div className="confirm-body">
+                <div className="confirm-title">命令执行需要你的确认</div>
+                <div className="confirm-cmd">{message.pendingConfirm.command}</div>
               </div>
               <div className="confirm-actions">
-                <button
-                  className="btn btn-primary"
-                  onClick={() => onConfirm(true)}
-                >
-                  确认执行
-                </button>
                 <button
                   className="btn btn-secondary"
                   onClick={() => onConfirm(false)}
                 >
                   取消
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => onConfirm(true)}
+                >
+                  确认执行
                 </button>
               </div>
             </div>

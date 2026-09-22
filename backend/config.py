@@ -65,6 +65,11 @@ DEFAULT_MODE = "fast"
 # 应用名称
 APP_NAME = "OpenUnknown"
 
+# 本地 skill 目录：agent 扫描该目录下的 <name>/SKILL.md，把 skill 目录注入 system prompt，
+# 并按需用 read_skill 工具读取说明书正文与 references。默认取 ~/.agents/skills/，
+# 可用环境变量 SKILLS_DIR 覆盖（写入 .env 生效）。详见 backend/agent/skills/。
+SKILLS_DIR = Path(os.getenv("SKILLS_DIR") or (Path.home() / ".agents" / "skills"))
+
 # LangSmith 追踪（可选）：在 .env 里设置 LANGSMITH_API_KEY 即自动开启。
 # LangGraph/LangChain 应用无需额外埋点代码，环境变量生效即可，详见 README。
 # 未显式指定项目名时，默认用应用名作为 LangSmith 项目名，便于控制台区分。

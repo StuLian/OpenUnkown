@@ -42,7 +42,7 @@ async def chat_confirm(
     request: Request,
     user_id: str = Depends(get_current_user_id),
 ) -> StreamingResponse:
-    """飞书写操作人工确认：approved=True 执行、False 取消，从 checkpoint 恢复并继续流式输出。"""
+    """命令执行人工确认：approved=True 执行、False 取消，从 checkpoint 恢复并继续流式输出。"""
     model = req.model if req.model and is_valid_model(req.model) else DEFAULT_MODEL
     mode = req.mode if req.mode and is_valid_mode(req.mode) else DEFAULT_MODE
     return StreamingResponse(

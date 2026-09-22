@@ -23,10 +23,16 @@ from backend.agent.context import (
 )
 from backend.agent.llm import get_llm
 from backend.agent.mcp import get_enabled_mcp_tools
-from backend.agent.prompts import IDENTITY_PROMPT, LARK_SECTION, build_system_prompt
+from backend.agent.prompts import (
+    IDENTITY_PROMPT,
+    SKILLS_DIRECTORY_SECTION,
+    build_system_prompt,
+)
 from backend.agent.router import route_intents
+from backend.agent.skills import get_skill_directory, read_skill
 from backend.agent.tools import TOOLS as BUILTIN_TOOLS
-from backend.agent.tools.lark_cli import classify_risk, ensure_yes, load_skill_descriptions
+from backend.agent.tools.lark_cli import ensure_yes
+from backend.agent.tools.shell import classify_command_risk
 from backend.config import (
     APP_NAME,
     DEFAULT_MODE,
@@ -106,9 +112,6 @@ def _select_tools(tools: list, text: str, want: dict) -> list:
         if name == "get_weather":
             if want["weather"]:
                 selected.append(t)
-        elif name == "lark_cli":
-            if want["feishu"]:
-                selected.append(t)
         elif name in ("browser_fetch", "browser_search"):
             if want["browse"]:
                 selected.append(t)
@@ -118,32 +121,27 @@ def _select_tools(tools: list, text: str, want: dict) -> list:
         elif name == "search_hotels":
             if want["hotel"]:
                 selected.append(t)
+        elif name in ("run_command", "read_skill"):
+            # 通用执行器 + skill 读取器常驻：目录常驻 prompt，靠风险确认闸门兜底。
+            selected.append(t)
         elif _mcp_tool_hit(t, text):
             selected.append(t)
     return selected
 
 
-# 飞书 domain 列表缓存（纯数据行，仅加载一次）
-_lark_domain_list: str | None = None
-
-
-async def _get_system_prompt(include_lark: bool) -> str:
-    """用模板组装 system prompt；仅命中飞书意图时追加 domain 短目录。"""
-    global _lark_domain_list
-    base = build_system_prompt(APP_NAME)
-    if not include_lark:
-        return base
-    if _lark_domain_list is None:
-        _lark_domain_list = await load_skill_descriptions()
-    if not _lark_domain_list:
-        return base
-    return base + "\n" + LARK_SECTION.format(domain_list=_lark_domain_list)
+async def _get_system_prompt() -> str:
+    """用模板组装 system prompt；常驻追加本地 skill 目录。"""
+    parts = [build_system_prompt(APP_NAME)]
+    directory = get_skill_directory()
+    if directory:
+        parts.append(SKILLS_DIRECTORY_SECTION.format(directory=directory))
+    return "\n\n".join(parts)
 
 
 async def _get_all_tools(user_id: str):
-    """获取指定用户所有生效的工具列表（内置工具 + 其启用的 MCP 工具）。"""
+    """获取指定用户所有生效的工具列表（内置工具 + read_skill + 其启用的 MCP 工具）。"""
     mcp_tools = await get_enabled_mcp_tools(user_id)
-    return [*BUILTIN_TOOLS, *mcp_tools]
+    return [*BUILTIN_TOOLS, read_skill, *mcp_tools]
 
 
 async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
@@ -181,7 +179,7 @@ async def _chat_node(state: MessagesState, config: RunnableConfig) -> dict:
     )
     if bound_tools:
         llm = llm.bind_tools(bound_tools)
-    system_prompt = await _get_system_prompt(include_lark=want["feishu"])
+    system_prompt = await _get_system_prompt()
     # 身份指令合并进首条系统提示（放历史之前），避免成为最后一条消息干扰模型作答
     # （此前放在历史末尾，视觉模型会把它当成当前任务，回答成「我是什么模型」）。
     identity_text = IDENTITY_PROMPT.format(model_name=model_name)
@@ -224,7 +222,7 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
     把 RunnableConfig 透传给工具，使需要调用模型服务的工具（如酒店检索）能取到
     当前用户的 ApiKey 与平台配置。
 
-    飞书安全闸门：凡是会被 lark_cli 判定为 write/high-risk-write 的命令，在执行
+    命令安全闸门：凡是 run_command 被判定为 write/high-risk-write 的命令，在执行
     **任何**工具之前先 interrupt() 暂停图，等前端用户确认后才放行。interrupt 放在
     所有执行之前，是因为 resume 时节点会从头部重跑——若先执行了读操作，会重复执行。
     """
@@ -239,17 +237,17 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
     tool_map = {t.name: t for t in all_tools}
     tool_calls = list(last_msg.tool_calls)
 
-    # 先扫描是否存在飞书写操作；找到首个写操作即中断等确认。
+    # 先扫描是否存在需确认的命令（写/高危写）；找到首个写操作即中断等确认。
     # resume 后 interrupt() 在同一位置返回前端传来的决策值（{"approved": bool}）。
     decision = None
     for tc in tool_calls:
-        if tc.get("name") != "lark_cli":
+        if tc.get("name") != "run_command":
             continue
         command = (tc.get("args") or {}).get("command", "")
-        risk = await classify_risk(command)
+        risk = await classify_command_risk(command)
         if risk in ("write", "high-risk-write"):
             decision = interrupt({
-                "type": "lark_write_confirmation",
+                "type": "command_write_confirmation",
                 "tool_call_id": tc.get("id"),
                 "command": command,
                 "risk": risk,
@@ -268,12 +266,12 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
         tool = tool_map.get(tool_name)
         if not tool:
             output = f"Error: Tool '{tool_name}' not found or not enabled."
-        elif tool_name == "lark_cli":
+        elif tool_name == "run_command":
             command = tool_args.get("command", "")
-            risk = await classify_risk(command)
+            risk = await classify_command_risk(command)
             if risk in ("write", "high-risk-write") and not approved:
                 output = (
-                    "用户未确认该飞书写操作，未执行任何变更。"
+                    "用户未确认该命令的执行，未做任何变更。"
                     "请向用户说明该操作已取消，并询问是否需要调整后重试。"
                 )
             else:
