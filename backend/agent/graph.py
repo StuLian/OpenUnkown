@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
 from langchain_core.messages import SystemMessage, ToolMessage
@@ -26,6 +27,7 @@ from backend.agent.mcp import get_enabled_mcp_tools
 from backend.agent.prompts import (
     IDENTITY_PROMPT,
     SKILLS_DIRECTORY_SECTION,
+    TIME_SECTION,
     build_system_prompt,
 )
 from backend.agent.router import route_intents
@@ -112,17 +114,19 @@ def _select_tools(tools: list, text: str, want: dict) -> list:
         if name == "get_weather":
             if want["weather"]:
                 selected.append(t)
-        elif name in ("browser_fetch", "browser_search"):
-            if want["browse"]:
-                selected.append(t)
         elif name.startswith("maps_"):
             if want["map"] or (want["weather"] and "weather" in name):
                 selected.append(t)
         elif name == "search_hotels":
             if want["hotel"]:
                 selected.append(t)
-        elif name in ("run_command", "read_skill"):
-            # 通用执行器 + skill 读取器常驻：目录常驻 prompt，靠风险确认闸门兜底。
+        elif name in (
+            "bash", "read_skill",
+            "web_search", "web_fetch",
+            "read_file", "write_file", "list_files",
+        ):
+            # 通用能力核心常驻：shell / skill 读取 / 文件读写 / 联网检索，
+            # 本地 skill 依赖它们随时可用，不再依赖意图路由。
             selected.append(t)
         elif _mcp_tool_hit(t, text):
             selected.append(t)
@@ -130,8 +134,11 @@ def _select_tools(tools: list, text: str, want: dict) -> list:
 
 
 async def _get_system_prompt() -> str:
-    """用模板组装 system prompt；常驻追加本地 skill 目录。"""
+    """用模板组装 system prompt；常驻追加当前时间与本地 skill 目录。"""
     parts = [build_system_prompt(APP_NAME)]
+    weekdays = "一二三四五六日"
+    now = datetime.now()
+    parts.append(TIME_SECTION.format(now=f"{now:%Y-%m-%d %H:%M:%S} 星期{weekdays[now.weekday()]}"))
     directory = get_skill_directory()
     if directory:
         parts.append(SKILLS_DIRECTORY_SECTION.format(directory=directory))
@@ -222,7 +229,7 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
     把 RunnableConfig 透传给工具，使需要调用模型服务的工具（如酒店检索）能取到
     当前用户的 ApiKey 与平台配置。
 
-    命令安全闸门：凡是 run_command 被判定为 write/high-risk-write 的命令，在执行
+    命令安全闸门：凡是 bash 被判定为 write/high-risk-write 的命令，在执行
     **任何**工具之前先 interrupt() 暂停图，等前端用户确认后才放行。interrupt 放在
     所有执行之前，是因为 resume 时节点会从头部重跑——若先执行了读操作，会重复执行。
     """
@@ -241,7 +248,7 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
     # resume 后 interrupt() 在同一位置返回前端传来的决策值（{"approved": bool}）。
     decision = None
     for tc in tool_calls:
-        if tc.get("name") != "run_command":
+        if tc.get("name") != "bash":
             continue
         command = (tc.get("args") or {}).get("command", "")
         risk = await classify_command_risk(command)
@@ -266,7 +273,7 @@ async def _tools_node(state: MessagesState, config: RunnableConfig) -> dict:
         tool = tool_map.get(tool_name)
         if not tool:
             output = f"Error: Tool '{tool_name}' not found or not enabled."
-        elif tool_name == "run_command":
+        elif tool_name == "bash":
             command = tool_args.get("command", "")
             risk = await classify_command_risk(command)
             if risk in ("write", "high-risk-write") and not approved:

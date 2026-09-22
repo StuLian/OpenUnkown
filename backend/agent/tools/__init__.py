@@ -4,14 +4,18 @@
 graph.py 只从这里 import TOOLS，不直接依赖具体工具文件。
 """
 from backend.agent.tools.weather import get_weather
-from backend.agent.tools.browser_use import browser_fetch, browser_search
+from backend.agent.tools.browser_use import web_fetch, web_search
 from backend.agent.tools.hotels import search_hotels
-from backend.agent.tools.shell import run_command
+from backend.agent.tools.shell import bash
+from backend.agent.tools.fs import list_files, read_file, write_file
 
 TOOLS = [
     get_weather,
-    browser_fetch,
-    browser_search,
+    web_fetch,
+    web_search,
     search_hotels,
-    run_command,
+    bash,
+    read_file,
+    write_file,
+    list_files,
 ]

@@ -1,4 +1,4 @@
-"""受控通用命令执行工具：run_command + 命令风险分级。
+"""受控通用命令执行工具：bash（shell）+ 命令风险分级。
 
 背景：本地 skill（SKILL.md）是说明书，真正执行依赖「跑命令」（lark-cli / npx / python 等）。
 本模块提供**一个**通用 shell 工具，替代「每类命令一个专用工具」，与 Claude/Codex 的通用 Bash 同构。
@@ -128,14 +128,14 @@ async def _run_shell(command: str) -> str:
 
 
 @tool
-async def run_command(command: str) -> str:
-    """执行一条 shell 命令并返回输出。用于执行本地 skill 说明书里要求的命令（如 lark-cli、npx）。
+async def bash(command: str) -> str:
+    """在 shell 中执行一条命令并返回输出（等价于 Claude Code 的 Bash 工具）。用于运行本地 skill 说明书里要求的命令（如 node、npx、lark-cli）。
 
     只读命令直接执行；写操作或无法判定风险的命令，系统会先弹出确认卡片，经用户批准后才真正执行，
-    你无需自行判断或拦截。不确定命令名/参数时，先 `--help` 查看用法，不要臆造。
+    你无需自行判断或拦截。不确定命令名/参数时，先 `<命令> --help` 查看用法，不要臆造。
 
     Args:
-        command: 完整 shell 命令，例如 'lark-cli docs --help'、'npx skills find react'。
+        command: 完整 shell 命令，例如 'ls -la'、'node scripts/render.mjs --out .'、'lark-cli docs --help'。
     """
     logger.info("[Shell] 执行命令: %s", command)
     result = await _run_shell(command)

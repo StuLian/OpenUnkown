@@ -1,6 +1,6 @@
-"""lark-cli 命令风险分级工具函数（供 shell.run_command 复用）。
+"""lark-cli 命令风险分级工具函数（供 shell.bash 复用）。
 
-原 `lark_cli` 独立工具已退役：飞书操作改由通用 `run_command("lark-cli ...")` 承接，
+原 `lark_cli` 独立工具已退役：飞书操作改由通用 `bash("lark-cli ...")` 承接，
 本模块只保留「判定一条 lark-cli 命令是读还是写」的分级逻辑。
 
 风险分级权威信号：lark-cli 每条命令的 `--help` 都带一行 `Risk: read | write | high-risk-write`，

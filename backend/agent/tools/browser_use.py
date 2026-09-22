@@ -1,6 +1,7 @@
-"""网页浏览工具：browser_fetch 抓取网页正文、browser_search 网络搜索。
+"""网页工具：web_fetch 抓取网页正文、web_search 网络搜索。
 
-沿用 weather.py 的轻量 httpx 实现，不引入无头浏览器、额外进程或 API Key。
+工具名对齐 Claude/Codex 生态标准名（web_search / web_fetch），本地 skill 说明书按此名调用。
+沿用轻量 httpx 实现，不引入无头浏览器、额外进程或 API Key。
 正文提取与搜索结果解析只用标准库 html.parser，无新增依赖。
 """
 from __future__ import annotations
@@ -106,7 +107,7 @@ def _normalize_url(url: str) -> str:
 
 
 @tool
-def browser_fetch(url: str) -> str:
+def web_fetch(url: str) -> str:
     """抓取指定网页并返回可读的纯文本正文。用户给出网址/链接、要求查看或阅读某个网页内容时必须调用本工具。
 
     Args:
@@ -293,7 +294,7 @@ def _bing_search(query: str, limit: int) -> list[dict]:
     return results
 
 
-def _web_search(query: str, limit: int) -> list[dict]:
+def _search_engine(query: str, limit: int) -> list[dict]:
     """先试 DuckDuckGo，被限流/空结果时回退 Bing，尽量保证搜索可用。"""
     try:
         results = _ddg_search(query, limit)
@@ -305,7 +306,7 @@ def _web_search(query: str, limit: int) -> list[dict]:
 
 
 @tool
-def browser_search(query: str, max_results: int = 5) -> str:
+def web_search(query: str, max_results: int = 5) -> str:
     """在互联网上搜索并返回结果摘要。用户问时事新闻、热点、某个话题的最新信息，或需要联网检索时调用本工具。
 
     Args:
@@ -318,14 +319,14 @@ def browser_search(query: str, max_results: int = 5) -> str:
 
     limit = max(1, min(int(max_results), 10))
     try:
-        results = _web_search(query, limit)
+        results = _search_engine(query, limit)
     except Exception as e:  # noqa: BLE001
         return f"Error: 搜索失败: {e}"
 
     if not results:
         return (
             "未找到搜索结果，或搜索引擎暂时不可用。"
-            "可尝试用 browser_fetch 直接访问已知的目标网站。"
+            "可尝试用 web_fetch 直接访问已知的目标网站。"
         )
 
     lines = [f"搜索「{query}」结果："]

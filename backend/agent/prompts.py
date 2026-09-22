@@ -72,6 +72,10 @@ SKILLS_DIRECTORY_SECTION = (
     "{directory}"
 )
 
+# 时间上下文：让模型知道「今天/本周」等相对时间（skill 常需要，如「今日 AI 日报」要当天日期）。
+# {now} 由 graph.py 的 _get_system_prompt 动态填充。
+TIME_SECTION = "当前时间：{now}（本地时区）。涉及「今天/最新/本周」时以此刻为准，不要臆造日期。"
+
 def build_system_prompt(app_name: str, context: str | None = None) -> str:
     """组装基础 system prompt：人设 + 行为 + 格式，可选 RAG 上下文。"""
     parts = [

@@ -31,7 +31,4 @@ frontend/node_modules/
 frontend/.npm-cache/
 frontend/dist/
 
-eval_reports
-project-intro
-project-intro-archify
-todo-list
+docs

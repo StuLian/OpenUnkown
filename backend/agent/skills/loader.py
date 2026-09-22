@@ -45,7 +45,10 @@ def load_skill_doc(name: str) -> str:
     except (OSError, UnicodeDecodeError) as e:
         return f"读取 skill '{name}' 失败: {e}"
     body = strip_frontmatter(text).strip()
-    return body if body else f"skill '{name}' 正文为空。"
+    if not body:
+        body = f"skill '{name}' 正文为空。"
+    # 附上 skill 目录绝对路径：模型据此定位 scripts/、写 content 文件、跑渲染脚本。
+    return f"skill 目录: {entry.path.parent}\n\n{body}"
 
 
 def load_skill_ref(name: str, ref_path: str) -> str:
