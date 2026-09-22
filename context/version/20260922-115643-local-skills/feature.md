@@ -64,4 +64,4 @@ cd frontend && npm run build                                     ->  ✓ built
 
 ## commit
 
-- hash：待回填（人 commit 后补）
+- hash：`9ce31ab962d21aa8e7faf207dc4ed8430e1df978`（短 `9ce31ab`）
