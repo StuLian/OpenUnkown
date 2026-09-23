@@ -1,6 +1,7 @@
 # feature · 20260918-130821-trace-panel
 
 > 状态：已提交
+> 提交 hash：535fd3a
 > 关联 proposal：无（本变更早于 context 体系建立，属历史变更，见 test_report 黄点）
 
 ## 实际改动

@@ -1,6 +1,7 @@
 # feature · 20260922-171147-skill-exec（补齐 skill 执行闭环）
 
-> 状态：已实施（待收尾）
+> 状态：已提交
+> 提交 hash：7d2341d
 > 关联 proposal：本目录 `proposal.md`
 
 ## 一、新增文件系统工具 `backend/agent/tools/fs.py`（约 90 行）

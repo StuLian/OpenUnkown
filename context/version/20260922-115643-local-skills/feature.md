@@ -1,6 +1,7 @@
 # feature · 20260922-115643-local-skills（本地 skill：读取 + 执行，两批次合并）
 
-> 状态：已实施（待收尾）
+> 状态：已提交
+> 提交 hash：9ce31ab
 > 关联 proposal：本目录 `proposal.md`（批次 A 只读最小版 + 批次 B 通用执行工具）
 > 合并说明（2026-09-22）：按 `coding.md` §6 合并两个连续批次到本目录（原 `20260922-132227-generic-executor` 并入）。
 

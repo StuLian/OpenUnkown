@@ -1,6 +1,7 @@
 # feature · 20260918-175408-memory-phase2（一版合并）
 
-> 状态：已实施（待收尾）
+> 状态：已提交
+> 提交 hash：3ec2619
 > 关联 proposal：本目录 `proposal.md`（Phase 2 记忆系统）+ `proposal_memory_manage.md`（R10-A 记忆入口）
 > 合并说明：本目录最初只记录 Phase 2 记忆系统；后在**同一个未提交工作区**内持续迭代，按
 >   `coding.md` §6「一个提交对应一个变更目录」合并了以下原独立目录的改动与记录：
