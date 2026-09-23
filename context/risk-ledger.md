@@ -9,3 +9,4 @@
 | 20260922-115643-local-skills | 2026-09-22 11:56:43 | 通用本地 Skill 加载器（读取）+ 受控通用执行工具（bash）+ 移除 lark 提示词注入 | 黄→修复：2 个红级（shell 运算符绕过 / env 泄露）已修；残留：提示注入、无 OS 沙箱、只读白名单未校准 | 9ce31ab |
 | 20260922-171147-skill-exec | 2026-09-22 17:11:47 | 补齐 skill 执行闭环：文件工具（read/write/list）+ web/bash 标准名 + 时间上下文 | 黄→修复：write_file 可写 SKILLS_DIR（持久注入）已修；残留：常驻 web 检索 token、skill 绝对路径进 trace | 7d2341d |
 | 20260923-111235-hallucination-gate | 2026-09-23 11:12:35 | 幻觉闸门：无据不答（生成后 grounding 判定 + 降级）+ trace 呈现（/api/runs/stats + verdict 渲染）+ 幻觉评测基线 | 黄→绿：独立验证两轮均绿；期间修复一个虚绿 bug（触发条件把 memory_injected 当证据导致闸门被跳过，已改为记忆作证据喂判定、不再阻断触发）；残留：evidence 在「有据但答错」场景未覆盖（二期）、run_stats 的 LIKE 依赖 _dumps 分隔符、判定失败归入 fn/tn 的口径 | fb53be1 |
+| 20260923-154738-hallucination-evidence | 2026-09-23 15:47:38 | 幻觉闸门二期：有据也判（回答忠于证据校验，抓「查了但答错」） | 黄→绿：独立验证 🟡 抓出 _truncate 砍尾误伤（关键事实在证据末尾被切） + golden 偏严，均已修后复验 🟢；残留：触发放宽后每轮多一次 qwen-turbo 判定（纯闲聊也白烧，GROUNDING_ENABLED 可关）、「漏报关键结果」未覆盖（三期）、判定失败归入 fn/tn 口径 | 633dbd1 |

@@ -1,6 +1,7 @@
 # feature · 20260923-154738-hallucination-evidence（幻觉闸门二期：有据也判）
 
-> 状态：已实施（待验证）
+> 状态：已实施（独立验证 🟡→修复→🟢 绿）
+> 提交 hash：633dbd1
 > 关联 proposal：本目录 `proposal.md`（已确认）
 
 ## 一、`backend/agent/grounding.py`
