@@ -1,6 +1,7 @@
 # feature · 20260923-111235-hallucination-gate（幻觉闸门：无据不答）
 
-> 状态：已实施（待验证）
+> 状态：已实施（独立验证两轮均 🟢 绿）
+> 提交 hash：fb53be1
 > 关联 proposal：本目录 `proposal.md`（已确认）
 
 ## 一、新增 `backend/agent/grounding.py`（约 160 行）
