@@ -16,6 +16,7 @@ import type {
   MemoryFact,
   RunDetail,
   RunsPage,
+  RunStats,
   Session,
   SettingsInfo,
   User,
@@ -227,6 +228,10 @@ export function fetchRuns(query: RunsQuery = {}): Promise<RunsPage> {
 
 export function fetchRunDetail(runId: string): Promise<RunDetail> {
   return apiJson<RunDetail>(`/api/runs/${encodeURIComponent(runId)}`);
+}
+
+export function fetchRunStats(): Promise<RunStats> {
+  return apiJson<RunStats>("/api/runs/stats");
 }
 
 export function submitFeedback(

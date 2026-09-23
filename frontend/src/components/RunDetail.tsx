@@ -172,6 +172,35 @@ export default function RunDetail({ run, onClose }: RunDetailProps) {
             <pre className="trace-pre answer">{run.final_answer || "(空)"}</pre>
           </Section>
 
+          {run.grounding ? (
+            <Section title="幻觉闸门判定">
+              <div className="run-kv">
+                <span>
+                  判定：
+                  {run.grounding.grounded ? "有据（grounded）" : "无据（ungrounded）"}
+                </span>
+                <span>
+                  置信度：
+                  {typeof run.grounding.confidence === "number"
+                    ? run.grounding.confidence.toFixed(2)
+                    : "—"}
+                </span>
+              </div>
+              {run.grounding.ungrounded_spans?.length ? (
+                <div className="run-flags">
+                  {run.grounding.ungrounded_spans.map((s, i) => (
+                    <span key={i} className="flag-badge">
+                      无据片段：{s}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {run.grounding.reason ? (
+                <pre className="trace-pre">{run.grounding.reason}</pre>
+              ) : null}
+            </Section>
+          ) : null}
+
           {run.feedback.length > 0 ? (
             <Section title={`反馈（${run.feedback.length}）`}>
               {run.feedback.map((f) => (

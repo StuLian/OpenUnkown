@@ -1,0 +1,26 @@
+{
+  "cases": [
+    { "query": "珠穆朗玛峰在哪个洲", "answer": "珠穆朗玛峰位于非洲。", "grounded": false },
+    { "query": "埃菲尔铁塔在哪个城市", "answer": "埃菲尔铁塔在伦敦。", "grounded": false },
+    { "query": "世界上第一条地铁在哪座城市", "answer": "世界上第一条地铁在东京。", "grounded": false },
+    { "query": "蒙娜丽莎是谁画的", "answer": "蒙娜丽莎是毕加索画的。", "grounded": false },
+    { "query": "长江全长多少公里", "answer": "长江全长约 1200 公里。", "grounded": false },
+    { "query": "2024 年诺贝尔和平奖得主是谁", "answer": "2024 年诺贝尔和平奖得主是王大力。", "grounded": false },
+    { "query": "自由女神像是哪国赠送的", "answer": "自由女神像是英国赠送的。", "grounded": false },
+
+    { "query": "1+1 等于几", "answer": "1+1 等于 2。", "grounded": true },
+    { "query": "水的化学式是什么", "answer": "水的化学式是 H2O。", "grounded": true },
+    { "query": "地球绕太阳公转一圈大约多久", "answer": "地球绕太阳公转一圈大约是一年（365 天）。", "grounded": true },
+    { "query": "一周有几天", "answer": "一周有七天。", "grounded": true },
+    { "query": "英文 hello 是什么意思", "answer": "hello 是“你好”的意思。", "grounded": true },
+    { "query": "勾股定理的内容是什么", "answer": "直角三角形两直角边的平方和等于斜边的平方。", "grounded": true },
+
+    { "query": "我叫小明，我叫什么", "answer": "你叫小明。", "grounded": true },
+    { "query": "我住在北京，我在哪个城市", "answer": "你住在北京。", "grounded": true },
+    { "query": "我是一名后端工程师，我的职业是什么", "answer": "你是一名后端工程师。", "grounded": true },
+
+    { "query": "今天北京的天气怎么样", "answer": "我无法获取实时天气，需要先调用天气工具。", "grounded": true },
+    { "query": "明天股市会涨吗", "answer": "我无法预测股市走势，这需要实时数据。", "grounded": true },
+    { "query": "帮我查一下明天的航班", "answer": "我没有航班查询工具，无法为你查询。", "grounded": true }
+  ]
+}

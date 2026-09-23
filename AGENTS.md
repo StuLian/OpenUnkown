@@ -133,6 +133,7 @@ EVAL_API_KEY=<key> .venv/bin/python -m backend.eval.rag_eval # RAG 检索评测�
 | `/api/memory` | DELETE | `/{fact_id}` | memory.py |
 | `/api/memory` | DELETE | `(空)` | memory.py |
 | `/api/runs` | GET | `(空)` | runs.py |
+| `/api/runs` | GET | `/stats` | runs.py |
 | `/api/runs` | GET | `/{run_id}` | runs.py |
 | `/api/runs` | POST | `/{run_id}/feedback` | runs.py |
 | `/api/sessions` | GET | `(空)` | sessions.py |
@@ -213,6 +214,7 @@ backend/
   │   ├── __init__.py
   │   ├── context.py
   │   ├── graph.py
+  │   ├── grounding.py
   │   ├── llm.py
   │   ├── memory.py
   │   ├── prompts.py
@@ -229,10 +231,13 @@ backend/
   │   │   ├── sessions.py
   │   │   ├── settings.py
   │   │   └── usage.py
+  │   ├── streaming/
+  │   │   ├── __init__.py
+  │   │   ├── confirm.py
+  │   │   └── turn.py
   │   ├── __init__.py
   │   ├── messages.py
-  │   ├── schemas.py
-  │   └── streaming.py
+  │   └── schemas.py
   ├── auth/
   │   ├── __init__.py
   │   ├── deps.py
@@ -240,9 +245,11 @@ backend/
   │   └── tokens.py
   ├── eval/
   │   ├── datasets/
+  │   │   ├── hallucination_cases.json
   │   │   ├── prompt_cases.json
   │   │   └── rag_hotels.json
   │   ├── __init__.py
+  │   ├── hallucination_eval.py
   │   ├── metrics.py
   │   ├── prompt_eval.py
   │   ├── rag_eval.py

@@ -27,8 +27,8 @@ def insert_run(run: dict) -> None:
             "INSERT INTO runs"
             " (id, user_id, session_id, model, mode, prompt_version, platform, input_text,"
             "  messages, tool_calls, tool_outputs, retrieved_docs, final_answer,"
-            "  usage, latency_ms, error, flags, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "  usage, latency_ms, error, flags, grounding, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 run["id"],
                 run["user_id"],
@@ -47,6 +47,7 @@ def insert_run(run: dict) -> None:
                 run.get("latency_ms", 0),
                 run.get("error"),
                 _dumps(run.get("flags", [])),
+                _dumps(run.get("grounding")),
                 run.get("created_at", time.time()),
             ),
         )
@@ -116,6 +117,36 @@ def list_runs(
     return [_row_to_summary(dict(r)) for r in rows]
 
 
+def run_stats(user_id: str) -> dict:
+    """幻觉闸门相关统计：判定次数 / 无据次数 / 幻觉风险标记数 / 总轮数。"""
+    with _lock:
+        conn = get_conn()
+        total = conn.execute(
+            "SELECT COUNT(*) AS n FROM runs WHERE user_id = ?", (user_id,)
+        ).fetchone()["n"]
+        checked = conn.execute(
+            "SELECT COUNT(*) AS n FROM runs WHERE user_id = ? AND grounding IS NOT NULL"
+            " AND grounding != '' AND grounding != 'null'",
+            (user_id,),
+        ).fetchone()["n"]
+        ungrounded = conn.execute(
+            'SELECT COUNT(*) AS n FROM runs WHERE user_id = ?'
+            ' AND grounding LIKE \'%"grounded": false%\'',
+            (user_id,),
+        ).fetchone()["n"]
+        flagged = conn.execute(
+            'SELECT COUNT(*) AS n FROM runs WHERE user_id = ?'
+            ' AND flags LIKE \'%"hallucination_risk"%\'',
+            (user_id,),
+        ).fetchone()["n"]
+    return {
+        "total": total,
+        "grounding_checked": checked,
+        "ungrounded": ungrounded,
+        "hallucination_risk": flagged,
+    }
+
+
 def count_runs(
     user_id: str,
     flag: str | None = None,
@@ -173,6 +204,7 @@ def get_run(user_id: str, run_id: str) -> dict | None:
         "latency_ms": r["latency_ms"],
         "error": r["error"],
         "flags": json.loads(r["flags"] or "[]"),
+        "grounding": json.loads(r.get("grounding") or "null"),
         "created_at": r["created_at"],
         "feedback": list_feedback_for_run(run_id, user_id),
     }

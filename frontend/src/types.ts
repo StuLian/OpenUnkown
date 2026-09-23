@@ -173,6 +173,22 @@ export interface RetrievedDoc {
   score: number;
 }
 
+/** 幻觉闸门判定结果（grounding verdict）。 */
+export interface GroundingVerdict {
+  grounded: boolean;
+  confidence: number;
+  ungrounded_spans: string[];
+  reason: string;
+}
+
+/** 幻觉闸门相关统计（Trace 面板顶部统计条）。 */
+export interface RunStats {
+  total: number;
+  grounding_checked: number;
+  ungrounded: number;
+  hallucination_risk: number;
+}
+
 export interface FeedbackRecord {
   id: string;
   run_id: string;
@@ -200,6 +216,7 @@ export interface RunDetail {
   latency_ms: number;
   error: string | null;
   flags: string[];
+  grounding: GroundingVerdict | null;
   created_at: number;
   feedback: FeedbackRecord[];
 }

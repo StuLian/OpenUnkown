@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { fetchRunDetail, fetchRuns } from "../api/endpoints";
-import type { RunDetail as RunDetailData, RunsPage } from "../types";
+import { fetchRunDetail, fetchRuns, fetchRunStats } from "../api/endpoints";
+import type { RunDetail as RunDetailData, RunStats, RunsPage } from "../types";
 import RunDetail from "./RunDetail";
 
 const FLAG_LABELS: Record<string, string> = {
@@ -35,6 +35,13 @@ export default function TracesPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<RunDetailData | null>(null);
+  const [stats, setStats] = useState<RunStats | null>(null);
+
+  useEffect(() => {
+    fetchRunStats()
+      .then(setStats)
+      .catch(() => setStats(null));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +76,32 @@ export default function TracesPanel() {
 
   return (
     <div className="trace-panel">
+      {stats ? (
+        <div className="trace-stats">
+          <span>
+            总轮数 <b>{stats.total}</b>
+          </span>
+          <span>
+            已判定 <b>{stats.grounding_checked}</b>
+          </span>
+          <span>
+            判为无据 <b>{stats.ungrounded}</b>
+          </span>
+          <span className={stats.hallucination_risk > 0 ? "warn" : ""}>
+            幻觉风险标记 <b>{stats.hallucination_risk}</b>
+          </span>
+          <span>
+            无据率{" "}
+            <b>
+              {stats.grounding_checked
+                ? Math.round((stats.ungrounded / stats.grounding_checked) * 100)
+                : 0}
+              %
+            </b>
+          </span>
+        </div>
+      ) : null}
+
       <div className="trace-toolbar">
         <label htmlFor="traceFlag">筛选</label>
         <select

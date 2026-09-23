@@ -34,6 +34,12 @@ def list_runs(
     }
 
 
+@router.get("/stats")
+def get_stats(user_id: str = Depends(get_current_user_id)) -> dict:
+    """幻觉闸门相关统计（判定次数 / 无据次数 / 幻觉风险标记数 / 总轮数）。"""
+    return store.run_stats(user_id)
+
+
 @router.get("/{run_id}")
 def get_run(run_id: str, user_id: str = Depends(get_current_user_id)) -> dict:
     """返回某条 run 的完整 trace（原始报文、工具调用、召回、用量、反馈）。"""

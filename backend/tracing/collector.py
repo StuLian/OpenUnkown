@@ -105,6 +105,7 @@ class TraceCollector:
         self.usage: dict = {}
         self.error: str | None = None
         self.pending_confirm = False
+        self.grounding: dict | None = None
         self._flags: set[str] = set()
 
     # ---- graph 侧写入 ----
@@ -174,6 +175,14 @@ class TraceCollector:
     def add_flag(self, flag: str) -> None:
         self._flags.add(flag)
 
+    def has_flag(self, flag: str) -> bool:
+        """查询是否已打某标记（供幻觉闸门判断是否已注入记忆等）。"""
+        return flag in self._flags
+
+    def set_grounding(self, verdict: dict) -> None:
+        """记录本轮 grounding 判定结果（供落库与 Trace 复盘）。"""
+        self.grounding = verdict
+
     # ---- 落库前统一收口 ----
     def finalize(self) -> dict:
         """计算自动标记与耗时，产出可落库的 dict。"""
@@ -204,4 +213,5 @@ class TraceCollector:
             "latency_ms": int((time.time() - self._started) * 1000),
             "error": self.error,
             "flags": sorted(self._flags),
+            "grounding": self.grounding,
         }

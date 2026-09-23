@@ -113,6 +113,42 @@ def render_rag_report(report: dict) -> str:
     return _wrap("RAG 检索评测报告", body)
 
 
+def render_hallucination_report(report: dict) -> str:
+    """把 hallucination_eval 的 report 渲染为 HTML。"""
+    s = report["summary"]
+    cards = "".join(
+        f'<div class="card {cls}"><div class="metric">{s[name]:.3f}</div>'
+        f'<div class="label">{label}</div></div>'
+        for name, label, cls in (
+            ("precision", "precision（准确率）", "ok" if s["precision"] >= 0.8 else "bad"),
+            ("recall", "recall（召回率）", "ok" if s["recall"] >= 0.8 else "bad"),
+            ("f1", "F1", "ok" if s["f1"] >= 0.8 else "bad"),
+        )
+    )
+    cards += (
+        f'<div class="card"><div class="metric">{s["num_cases"]}</div>'
+        '<div class="label">样例数</div></div>'
+        f'<div class="card"><div class="metric">{s["false_positive_rate"]:.3f}</div>'
+        '<div class="label">误伤率 FP/(FP+TN)</div></div>'
+        f'<div class="card"><div class="metric">{s["false_negative_rate"]:.3f}</div>'
+        '<div class="label">漏判率 FN/(FN+TP)</div></div>'
+    )
+    marks = {"tp": ("✓ 抓对", "ok"), "fn": ("✗ 漏判", "bad"), "fp": ("✗ 误伤", "bad"), "tn": ("✓ 放行", "ok")}
+    rows = []
+    for r in report["rows"]:
+        mark, cls = marks[r["outcome"]]
+        rows.append(
+            '<div class="qrow">'
+            f'<div class="qline"><span class="qtext">{_esc(r["query"])}</span>'
+            f'<span class="qscore {cls}">{mark}（golden={"无据" if not r["golden"] else "有据"}，判为 {r["pred"]}）</span></div>'
+            f'<div class="qdetail">回答：{_esc(r["answer"])}</div>'
+            + (f'<div class="qdetail">理由：{_esc(r["reason"])}</div>' if r["reason"] else "")
+            + "</div>"
+        )
+    body = f'<div class="cards">{cards}</div><h2>逐条明细</h2><div class="qlist">{"".join(rows)}</div>'
+    return _wrap("幻觉闸门评测报告", body)
+
+
 def render_prompt_report(version: str, results: list[dict], ok: bool) -> str:
     """把 prompt_eval 的结果渲染为 HTML。"""
     rows = []

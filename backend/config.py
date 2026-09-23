@@ -65,6 +65,13 @@ DEFAULT_MODE = "fast"
 # 应用名称
 APP_NAME = "OpenUnknown"
 
+# 幻觉闸门：生成后 grounding 判定（无据不答）。默认开启；仅当本轮「无工具调用 +
+# 无 RAG 召回 + 无记忆注入」时才判定，把多一次 LLM 调用的成本只压在高风险场景。
+# 判定模型用便宜模型；置信度低于阈值时「宁漏不误伤」（不降级提示）。
+GROUNDING_ENABLED = True
+GROUNDING_MODEL = "qwen-turbo"
+GROUNDING_CONFIDENCE_THRESHOLD = 0.7
+
 # 本地 skill 目录：agent 扫描该目录下的 <name>/SKILL.md，把 skill 目录注入 system prompt，
 # 并按需用 read_skill 工具读取说明书正文与 references。默认取 ~/.agents/skills/，
 # 可用环境变量 SKILLS_DIR 覆盖（写入 .env 生效）。详见 backend/agent/skills/。

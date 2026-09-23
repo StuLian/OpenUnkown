@@ -192,6 +192,11 @@ def get_conn() -> sqlite3.Connection:
             )
         except sqlite3.OperationalError:
             pass
+        # 迁移：为旧库 runs 表补充 grounding 列（幻觉闸门判定结果 JSON，存在则忽略）
+        try:
+            _conn.execute("ALTER TABLE runs ADD COLUMN grounding TEXT")
+        except sqlite3.OperationalError:
+            pass
         _conn.execute(
             """
             CREATE TABLE IF NOT EXISTS feedback (

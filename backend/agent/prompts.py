@@ -12,7 +12,8 @@
 from __future__ import annotations
 
 # 语义版本：改动任何层的行为约束后需递增，供评测集记录与回归对比
-PROMPT_VERSION = "1.0.0"
+# 1.1.0：新增幻觉闸门（GROUNDING_PROMPT 判定层）
+PROMPT_VERSION = "1.1.0"
 
 # ---------------------------------------------------------------------------
 # 静态层：身份 / 人设（几乎不变）
@@ -75,6 +76,27 @@ SKILLS_DIRECTORY_SECTION = (
 # 时间上下文：让模型知道「今天/本周」等相对时间（skill 常需要，如「今日 AI 日报」要当天日期）。
 # {now} 由 graph.py 的 _get_system_prompt 动态填充。
 TIME_SECTION = "当前时间：{now}（本地时区）。涉及「今天/最新/本周」时以此刻为准，不要臆造日期。"
+
+# ---------------------------------------------------------------------------
+# 幻觉闸门：生成后 grounding 判定提示词（无据不答）
+# {evidence}/{query}/{answer} 由 grounding.check_grounding 动态填充；
+# evidence 为空串时表示本轮无任何外部证据。只要求输出一个 JSON，供机器解析。
+# ---------------------------------------------------------------------------
+GROUNDING_PROMPT = (
+    "你是事实核查器。判断下面「助手回答」里的具体事实陈述是否有来源支撑，"
+    "只输出一个 JSON 对象，不要输出任何其他文字。\n\n"
+    "判定规则：\n"
+    "1. 若回答仅转述用户已提供的信息、明确表达不确定/无法获取、或属通用常识与纯推理"
+    "（数学计算、代码、词义解释、通用定义），视为 grounded。\n"
+    "2. 若回答对【具体、可验证的事实】（地点 / 时间 / 数值 / 人物 / 事件 / 价格 / 机构名等）"
+    "作出了断言，但证据中查无来源、且无法由常识直接判定对错，把这些片段列入 ungrounded_spans。\n\n"
+    "输出 JSON 格式（confidence 是 0~1 之间你对本次判定把握的置信度）：\n"
+    '{{"grounded": true 或 false, "confidence": 0.0~1.0, "ungrounded_spans": ["无据片段"], "reason": "一句话理由"}}\n\n'
+    "证据（为空表示本轮无任何外部证据）：\n{evidence}\n\n"
+    "用户问题：\n{query}\n\n"
+    "助手回答：\n{answer}"
+)
+
 
 def build_system_prompt(app_name: str, context: str | None = None) -> str:
     """组装基础 system prompt：人设 + 行为 + 格式，可选 RAG 上下文。"""
