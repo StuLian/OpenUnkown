@@ -43,7 +43,9 @@ async def _evaluate(api_key: str, dataset: dict, base_url: str) -> dict:
     rows: list[dict] = []
     counts = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
     for c in cases:
-        verdict = await check_grounding(c["query"], c["answer"], "", api_key, base_url)
+        verdict = await check_grounding(
+            c["query"], c["answer"], c.get("evidence", ""), api_key, base_url
+        )
         pred = verdict.get("grounded") if verdict else None
         outcome = _classify(pred, c["grounded"])
         counts[outcome] += 1

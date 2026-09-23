@@ -1,12 +1,13 @@
-"""幻觉闸门：生成后 grounding 判定（无据不答）。
+"""幻觉闸门：生成后 grounding 判定（无据不答 + 有据校验）。
 
-设计见 context/version/20260923-111235-hallucination-gate/proposal.md：
-- 触发：仅当本轮「无工具调用 + 无 RAG 召回 + 无记忆注入」时才判定（省成本，只对高风险场景付费）。
-- 判定：拿「用户问题 + 助手回答 + 证据(可能为空)」问一次便宜模型，输出结构化 verdict。
+v1 见 context/version/20260923-111235-hallucination-gate/proposal.md，二期见
+context/version/20260923-154738-hallucination-evidence/proposal.md：
+- 触发：答案非空即判（二期放宽，不再只判「无工具 + 无 RAG」）。
+- 判定：拿「用户问题 + 助手回答 + 证据(工具返回+RAG召回+记忆，可能为空)」问一次便宜模型。
 - 降级：grounded=false 且 confidence ≥ 阈值 → 打 hallucination_risk + 追加免责提示（标注不拒答）。
 - 容错：判定异常 / JSON 解析失败一律按「不拦截」处理，绝不阻塞主流程。
 
-本模块只做「纯判定 + 解析」，不直接碰 trace 落库与流式收口（由 streaming.py 调用）。
+本模块只做「纯判定 + 解析」，不直接碰 trace 落库与流式收口（由 streaming.turn 调用）。
 """
 from __future__ import annotations
 
@@ -28,18 +29,25 @@ from backend.config import (
 
 logger = logging.getLogger(__name__)
 
-# 追加在正文之后、仅当判定为无据时下发的免责提示（markdown 引用块）
-GROUNDING_DISCLAIMER = "\n\n> ⚠️ 以上回答基于模型自身知识、未经检索 / 工具验证，请谨慎采信。"
+# 追加在正文之后、仅当判定为无据/与证据不符时下发的免责提示（markdown 引用块）
+GROUNDING_DISCLAIMER = "\n\n> ⚠️ 以上回答可能存在事实性错误，请谨慎采信。"
+
+# 判定证据最大长度：工具返回 / RAG 召回可能很长（如 shell 输出 20KB），超限截断防顶破预算
+EVIDENCE_MAX_CHARS = 6000
 
 
-def should_run_grounding(has_tool_calls: bool, has_retrieved_docs: bool) -> bool:
-    """是否触发判定：本轮无工具调用、无 RAG 召回时才判。
+def _truncate(text: str, max_chars: int) -> str:
+    """把证据文本截断到 max_chars：保头保尾、砍中间。
 
-    记忆注入**不算**「有证据」——记忆是用户画像/偏好，不支撑具体事实断言；
-    若因记忆注入就跳过，闸门会因「几乎每轮都有记忆」而形同虚设（2026-09-23 修复）。
-    有工具/RAG 的回答零额外成本；证据内的误读属二期范围。
+    关键事实常在证据末尾（最近的工具返回），只保头部会把末尾事实砍掉、造成误伤；
+    故保留前 2/3 + 后 1/3，中间省略（2026-09-23 二期验证修复）。
     """
-    return not has_tool_calls and not has_retrieved_docs
+    if len(text) <= max_chars:
+        return text
+    head = max_chars * 2 // 3
+    tail = max_chars - head
+    omitted = len(text) - max_chars
+    return text[:head] + f"\n...(中间省略 {omitted} 字)...\n" + text[-tail:]
 
 
 def _extract_memory_text(collector) -> str:
@@ -138,23 +146,22 @@ async def check_grounding(
 
 
 async def apply_grounding(collector, answer: str, config: dict) -> str | None:
-    """对完成的一轮回答做无据判定；返回要追加的免责提示（None 表示无需/失败）。
+    """对完成的一轮回答做 grounding 判定；返回要追加的免责提示（None 表示无需/失败）。
 
-    触发条件（无工具调用 + 无 RAG 召回 + 无记忆注入）不满足、判定失败、解析失败
-    都返回 None，绝不影响主流程。collector 传 None 或未启用时直接返回 None。
+    二期：答案非空即判（不再只判「无据」），把真实证据（工具返回 + RAG 召回 + 记忆）
+    传给判定模型，核对「回答是否忠于证据」。判定失败/解析失败都返回 None，绝不影响主流程。
     """
     if not GROUNDING_ENABLED or collector is None or not answer.strip():
         return None
-    if not should_run_grounding(
-        has_tool_calls=bool(collector.tool_calls),
-        has_retrieved_docs=bool(collector.retrieved_docs),
-    ):
-        return None
     cfg = config.get("configurable") or {}
-    evidence = build_evidence_text(collector.tool_outputs, collector.retrieved_docs)
+    evidence = _truncate(
+        build_evidence_text(collector.tool_outputs, collector.retrieved_docs),
+        EVIDENCE_MAX_CHARS,
+    )
     memory_text = _extract_memory_text(collector)
     if memory_text:
-        evidence = f"{evidence}\n\n{memory_text}".strip() if evidence else memory_text
+        merged = f"{evidence}\n\n{memory_text}".strip() if evidence else memory_text
+        evidence = _truncate(merged, EVIDENCE_MAX_CHARS)
     verdict = await check_grounding(
         query=collector.input_text,
         answer=answer,

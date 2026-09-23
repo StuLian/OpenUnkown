@@ -21,6 +21,15 @@
 
     { "query": "今天北京的天气怎么样", "answer": "我无法获取实时天气，需要先调用天气工具。", "grounded": true },
     { "query": "明天股市会涨吗", "answer": "我无法预测股市走势，这需要实时数据。", "grounded": true },
-    { "query": "帮我查一下明天的航班", "answer": "我没有航班查询工具，无法为你查询。", "grounded": true }
+    { "query": "帮我查一下明天的航班", "answer": "我没有航班查询工具，无法为你查询。", "grounded": true },
+
+    { "query": "今天北京天气怎么样", "answer": "北京今天 30 摄氏度，有暴雨。", "evidence": "[工具 get_weather]\n北京 25°C，晴", "grounded": false },
+    { "query": "推荐一家西雅图带泳池的酒店", "answer": "A 酒店有泳池、健身房和免费早餐，每晚 500 美元。", "evidence": "[工具 search_hotels]\nA 酒店：有泳池，每晚 200 美元", "grounded": false },
+    { "query": "这家酒店一晚多少钱", "answer": "A 酒店每晚 500 美元。", "evidence": "[工具 search_hotels]\nA 酒店：每晚 200 美元", "grounded": false },
+    { "query": "珠穆朗玛峰有多高", "answer": "珠穆朗玛峰海拔 8848 米，位于非洲。", "evidence": "[工具 web_search]\n珠穆朗玛峰海拔 8848.86 米，位于亚洲", "grounded": false },
+
+    { "query": "今天北京天气怎么样", "answer": "北京今天 25 摄氏度，晴。", "evidence": "[工具 get_weather]\n北京 25°C，晴", "grounded": true },
+    { "query": "这家酒店有什么设施", "answer": "A 酒店有泳池，每晚 200 美元。", "evidence": "[工具 search_hotels]\nA 酒店：有泳池，每晚 200 美元", "grounded": true },
+    { "query": "这家酒店有什么设施", "answer": "A 酒店主要提供泳池，价格为每晚 200 美元。", "evidence": "[工具 search_hotels]\nA 酒店：有泳池，每晚 200 美元", "grounded": true }
   ]
 }

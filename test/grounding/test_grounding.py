@@ -5,10 +5,11 @@ check_grounding 涉及真实 LLM 调用，不在单测内跑（由验证阶段�
 from __future__ import annotations
 
 from backend.agent.grounding import (
+    EVIDENCE_MAX_CHARS,
     GROUNDING_DISCLAIMER,
+    _truncate,
     build_evidence_text,
     parse_verdict,
-    should_run_grounding,
     should_warn,
 )
 from backend.config import GROUNDING_CONFIDENCE_THRESHOLD
@@ -66,10 +67,16 @@ def test_parse_verdict_defaults():
     assert v["reason"] == ""
 
 
-def test_should_run_grounding():
-    assert should_run_grounding(False, False) is True
-    assert should_run_grounding(True, False) is False
-    assert should_run_grounding(False, True) is False
+def test_truncate():
+    assert _truncate("short", EVIDENCE_MAX_CHARS) == "short"
+    # 关键事实在末尾：保头保尾必须保留末尾事实（二期验证修复的误伤）
+    head = "A" * 5000
+    tail = "关键事实：北京 25°C 晴"
+    long = head + "X" * 2000 + tail
+    out = _truncate(long, EVIDENCE_MAX_CHARS)
+    assert "关键事实：北京 25°C 晴" in out
+    assert "中间省略" in out
+    assert len(out) <= EVIDENCE_MAX_CHARS + len("\n...(中间省略 NNNN 字)...\n")
 
 
 def test_extract_memory_text():
